@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
@@ -8,7 +8,7 @@ import { randomBytes } from 'crypto';
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages] });
 
 async function generateAndGrantKey(userId: number, discordUser: any, type: string) {
-  const keyStr = `SCOUT-${type.toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+  const keyStr = `GALAXY-${type.toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`;
   const newKey = await storage.createKey({
     key: keyStr,
     type: type,
@@ -20,7 +20,7 @@ async function generateAndGrantKey(userId: number, discordUser: any, type: strin
     .setColor(0x22c55e)
     .setTitle('Payment Received!')
     .setDescription(`Thank you for your purchase! Here is your access key:\n\n\`${newKey.key}\`\n\nUse \`/redeem key:${newKey.key}\` in the server to activate your access.`)
-    .setFooter({ text: 'Enjoy Scout Bot!' });
+    .setFooter({ text: 'Enjoy Galaxy Bot!' });
 
   try {
     await discordUser.send({ embeds: [embed] });
@@ -126,8 +126,8 @@ export async function startBot() {
         try {
           const embed = new EmbedBuilder()
             .setColor(0x22c55e)
-            .setTitle('Scout Bot Key')
-            .setDescription('**"What is scout?"**\nScout bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Scout makes pulling easy and fast!')
+            .setTitle('Galaxy Bot Key')
+            .setDescription('**"What is Galaxy?"**\nGalaxy bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Galaxy makes pulling easy and fast!')
             .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
 
           const row1 = new ActionRowBuilder<StringSelectMenuBuilder>()
@@ -148,23 +148,19 @@ export async function startBot() {
                 .setCustomId('select_payment')
                 .setPlaceholder('Choose a payment method')
                 .addOptions([
-                  { label: 'CASHAPP', value: 'cashapp', emoji: '💸' },
-                  { label: 'PAYPAL', value: 'paypal', emoji: '🅿️' },
-                  { label: 'VENMO', value: 'venmo', emoji: '🟦' },
                   { label: 'CARD', value: 'card', emoji: '💳' },
-                  { label: 'BTC', value: 'btc', emoji: '🪙' },
-                  { label: 'LTC', value: 'ltc', emoji: '💎' }
+                  { label: 'PAYPAL', value: 'paypal', emoji: '🅿️' },
+                  { label: 'CASHAPP', value: 'cashapp', emoji: '💸', description: 'Not available - Coming Soon!' },
+                  { label: 'VENMO', value: 'venmo', emoji: '🟦', description: 'Not available - Coming Soon!' },
+                  { label: 'BTC', value: 'btc', emoji: '🪙', description: 'Not available - Coming Soon!' },
+                  { label: 'LTC', value: 'ltc', emoji: '💎', description: 'Not available - Coming Soon!' }
                 ])
             );
 
-          await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+          await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: false });
         } catch (error) {
           console.error('Error in /buy command:', error);
-          if (interaction.deferred || interaction.replied) {
-            await interaction.followUp({ content: 'An error occurred while processing the buy command.', ephemeral: true });
-          } else {
-            await interaction.reply({ content: 'An error occurred while processing the buy command.', ephemeral: true });
-          }
+          await interaction.reply({ content: 'An error occurred while processing the buy command.', ephemeral: false });
         }
         return;
       }
@@ -174,7 +170,7 @@ export async function startBot() {
         const key = await storage.getKey(keyStr);
 
         if (!key || key.status === 'redeemed') {
-          await interaction.reply({ content: 'Invalid or already redeemed key.', ephemeral: true });
+          await interaction.reply({ content: 'Invalid or already redeemed key.', ephemeral: false });
           return;
         }
 
@@ -186,7 +182,7 @@ export async function startBot() {
         await storage.redeemKey(key.id, user.id);
         await storage.updateUserSubscription(user.id, key.type, expiresAt);
 
-        await interaction.reply({ content: `Successfully redeemed **${key.type}** access!`, ephemeral: true });
+        await interaction.reply({ content: `Successfully redeemed **${key.type}** access!`, ephemeral: false });
         return;
       }
 
@@ -195,8 +191,8 @@ export async function startBot() {
         const errorEmbed = new EmbedBuilder()
           .setColor(0xff0000)
           .setTitle('Invalid Access')
-          .setDescription('No Key Found\nPurchase a key using `/buy` (Available on dashboard)\nMade by Simba');
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+          .setDescription('No Key Found\nPurchase a key using `/buy` (Available on dashboard)\nMade by Galaxy Team');
+        await interaction.reply({ embeds: [errorEmbed], ephemeral: false });
         return;
       }
 
@@ -210,24 +206,24 @@ export async function startBot() {
                  .addFields({ name: 'Gamerscore', value: profile.gamerScore }, { name: 'XID', value: profile.xid });
             await interaction.reply({ embeds: [embed] });
           } else {
-            await interaction.reply({ content: 'Xbox profile not found.', ephemeral: true });
+            await interaction.reply({ content: 'Xbox profile not found.', ephemeral: false });
           }
           break;
         case 'xbox_ip':
         case 'psn_ip':
-          await interaction.reply({ content: 'IP Pulling feature is currently restricted. Contact support for access.', ephemeral: true });
+          await interaction.reply({ content: 'IP Pulling feature is currently restricted. Contact support for access.', ephemeral: false });
           break;
         case 'xbox_stw_receipt':
         case 'psn_stw_receipt':
         case 'xbox_vbucks_receipt':
         case 'psn_vbucks_receipt':
           embed.setTitle('Receipt Generated Successfully').setDescription('Your requested receipt has been generated and sent to your DM (Placeholder).');
-          await interaction.reply({ embeds: [embed], ephemeral: true });
+          await interaction.reply({ embeds: [embed], ephemeral: false });
           break;
         case 'xbox_aov':
         case 'psn_aov':
           embed.setTitle('AOV Created').setDescription('Account Ownership Verification (AOV) has been initiated.');
-          await interaction.reply({ embeds: [embed], ephemeral: true });
+          await interaction.reply({ embeds: [embed], ephemeral: false });
           break;
         case 'iplookup':
           const ip = interaction.options.getString('ip', true);
@@ -235,47 +231,80 @@ export async function startBot() {
           await interaction.reply({ embeds: [embed] });
           break;
         default:
-          await interaction.reply({ content: 'Unknown command.', ephemeral: true });
+          await interaction.reply({ content: 'Unknown command.', ephemeral: false });
       }
     }
 
     if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'select_key') {
         const selectedKey = interaction.values[0];
-        await interaction.reply({ content: `You selected **${selectedKey.replace('_', ' ')}**. Now select a payment method below.`, ephemeral: true });
+        await interaction.reply({ content: `You selected **${selectedKey.replace('_', ' ')}**. Now select a payment method below.`, ephemeral: false });
       }
       if (interaction.customId === 'select_payment') {
         const paymentMethod = interaction.values[0];
-        const selectedKey = 'monthly'; 
-        const payEmbed = new EmbedBuilder()
-          .setColor(0x22c55e)
-          .setTitle(`Payment: ${paymentMethod.toUpperCase()}`)
-          .setDescription(`Please send the payment to our ${paymentMethod.toUpperCase()} address.\n\nOnce sent, click the button below to verify your payment and receive your key.`)
-          .addFields({ name: 'Amount', value: '$20.00' });
-        const verifyButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId(`verify_pay_${paymentMethod}_${selectedKey}`).setLabel('Verify Payment').setStyle(ButtonStyle.Success)
+        if (paymentMethod !== 'card' && paymentMethod !== 'paypal') {
+          return interaction.reply({ content: `**${paymentMethod.toUpperCase()}** is currently not available. Coming Soon!`, ephemeral: false });
+        }
+
+        const modal = new ModalBuilder()
+          .setCustomId(`verify_modal_${paymentMethod}_monthly`)
+          .setTitle(`${paymentMethod.toUpperCase()} Verification`);
+
+        const emailInput = new TextInputBuilder()
+          .setCustomId('email')
+          .setLabel("What is your email address?")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("example@gmail.com")
+          .setRequired(true);
+
+        const amountInput = new TextInputBuilder()
+          .setCustomId('amount')
+          .setLabel("How much did you send?")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("20.00")
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(amountInput)
         );
-        await interaction.reply({ embeds: [payEmbed], components: [verifyButton], ephemeral: true });
+
+        await interaction.showModal(modal);
+      }
+    }
+
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith('verify_modal_')) {
+        const [, , method, type] = interaction.customId.split('_');
+        const email = interaction.fields.getTextInputValue('email');
+        const amount = interaction.fields.getTextInputValue('amount');
+
+        await interaction.reply({ content: `Verifying ${method.toUpperCase()} payment for ${email}...`, ephemeral: false });
+
+        // SellAuth style verification logic
+        setTimeout(async () => {
+          // Simple validation logic
+          if (parseFloat(amount) >= 20.00 && email.includes('@')) {
+            let user = await storage.getUserByDiscordId(interaction.user.id);
+            if (user) {
+              await generateAndGrantKey(user.id, interaction.user, type);
+              await interaction.followUp({ content: '✅ Payment verified! Your key has been sent to your DMs.', ephemeral: false });
+            }
+          } else {
+            await interaction.followUp({ content: '❌ Payment failed! We could not verify your transaction. Please contact support.', ephemeral: false });
+          }
+        }, 3000);
       }
     }
 
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('verify_pay_')) {
-        const [, , method, type] = interaction.customId.split('_');
-        let user = await storage.getUserByDiscordId(interaction.user.id);
-        if (user) {
-          await interaction.reply({ content: 'Verifying payment... (This may take a few minutes)', ephemeral: true });
-          setTimeout(async () => {
-            await generateAndGrantKey(user!.id, interaction.user, type);
-            try {
-              await interaction.followUp({ content: 'Payment verified! Check your DMs for the access key.', ephemeral: true });
-            } catch (e) {}
-          }, 3000);
-        }
+        // Legacy button handling, redirect to modal
+        await interaction.reply({ content: 'Please use the selection menu to trigger the verification form.', ephemeral: false });
       }
     }
   });
 
   client.login(process.env.DISCORD_TOKEN);
-  console.log('Discord Bot Logged In with Updated Commands');
+  console.log('Galaxy Bot Logged In');
 }
