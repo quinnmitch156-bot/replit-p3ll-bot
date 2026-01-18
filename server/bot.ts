@@ -123,40 +123,49 @@ export async function startBot() {
       }
 
       if (interaction.commandName === 'buy') {
-        const embed = new EmbedBuilder()
-          .setColor(0x22c55e)
-          .setTitle('Scout Bot Key')
-          .setDescription('**"What is scout?"**\nScout bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Scout makes pulling easy and fast!')
-          .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
+        try {
+          const embed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle('Scout Bot Key')
+            .setDescription('**"What is scout?"**\nScout bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Scout makes pulling easy and fast!')
+            .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
 
-        const row1 = new ActionRowBuilder<StringSelectMenuBuilder>()
-          .addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId('select_key')
-              .setPlaceholder('Choose a key...')
-              .addOptions([
-                { label: 'Lifetime Access', value: 'lifetime', description: '$35.00' },
-                { label: '1 Month Access', value: 'monthly', description: '$20.00' },
-                { label: 'Lifetime Access + Full In Depth Pulling Guide', value: 'lifetime_guide', description: '$45.00' }
-              ])
-          );
+          const row1 = new ActionRowBuilder<StringSelectMenuBuilder>()
+            .addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('select_key')
+                .setPlaceholder('Choose a key...')
+                .addOptions([
+                  { label: 'Lifetime Access', value: 'lifetime', description: '$35.00' },
+                  { label: '1 Month Access', value: 'monthly', description: '$20.00' },
+                  { label: 'Lifetime Access + Full In Depth Pulling Guide', value: 'lifetime_guide', description: '$45.00' }
+                ])
+            );
 
-        const row2 = new ActionRowBuilder<StringSelectMenuBuilder>()
-          .addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId('select_payment')
-              .setPlaceholder('Choose a payment method')
-              .addOptions([
-                { label: 'CASHAPP', value: 'cashapp', emoji: '💸' },
-                { label: 'PAYPAL', value: 'paypal', emoji: '🅿️' },
-                { label: 'VENMO', value: 'venmo', emoji: '🇻' },
-                { label: 'CARD', value: 'card', emoji: '💳' },
-                { label: 'BTC', value: 'btc', emoji: '₿' },
-                { label: 'LTC', value: 'ltc', emoji: 'Ł' }
-              ])
-          );
+          const row2 = new ActionRowBuilder<StringSelectMenuBuilder>()
+            .addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('select_payment')
+                .setPlaceholder('Choose a payment method')
+                .addOptions([
+                  { label: 'CASHAPP', value: 'cashapp', emoji: '💸' },
+                  { label: 'PAYPAL', value: 'paypal', emoji: '🅿️' },
+                  { label: 'VENMO', value: 'venmo', emoji: '🇻' },
+                  { label: 'CARD', value: 'card', emoji: '💳' },
+                  { label: 'BTC', value: 'btc', emoji: '₿' },
+                  { label: 'LTC', value: 'ltc', emoji: 'Ł' }
+                ])
+            );
 
-        await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+          await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
+        } catch (error) {
+          console.error('Error in /buy command:', error);
+          if (interaction.deferred || interaction.replied) {
+            await interaction.followUp({ content: 'An error occurred while processing the buy command.', ephemeral: true });
+          } else {
+            await interaction.reply({ content: 'An error occurred while processing the buy command.', ephemeral: true });
+          }
+        }
         return;
       }
 
