@@ -1,10 +1,34 @@
-import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
 import { format } from 'date-fns';
+import { randomBytes } from 'crypto';
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages] });
+
+async function generateAndGrantKey(userId: number, discordUser: any, type: string) {
+  const keyStr = `SCOUT-${type.toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+  const newKey = await storage.createKey({
+    key: keyStr,
+    type: type,
+    status: "active",
+    createdBy: userId
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x22c55e)
+    .setTitle('Payment Received!')
+    .setDescription(`Thank you for your purchase! Here is your access key:\n\n\`${newKey.key}\`\n\nUse \`/redeem key:${newKey.key}\` in the server to activate your access.`)
+    .setFooter({ text: 'Enjoy Scout Bot!' });
+
+  try {
+    await discordUser.send({ embeds: [embed] });
+  } catch (err) {
+    console.error('Could not send DM to user:', err);
+  }
+  return newKey;
+}
 
 const commands = [
   new SlashCommandBuilder()
@@ -86,87 +110,78 @@ export async function startBot() {
   }
 
   client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isChatInputCommand()) return;
+    if (interaction.isChatInputCommand()) {
+      let user = await storage.getUserByDiscordId(interaction.user.id);
+      if (!user) {
+        user = await storage.createUser({
+          discordId: interaction.user.id,
+          username: interaction.user.username,
+          role: 'user',
+          subscriptionTier: null,
+          subscriptionExpiresAt: null
+        });
+      }
 
-    let user = await storage.getUserByDiscordId(interaction.user.id);
-    if (!user) {
-      user = await storage.createUser({
-        discordId: interaction.user.id,
-        username: interaction.user.username,
-        role: 'user',
-        subscriptionTier: null,
-        subscriptionExpiresAt: null
-      });
-    }
+      const hasAccess = user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
 
-    const hasAccess = user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
+      if (interaction.commandName === 'buy') {
+        const embed = new EmbedBuilder()
+          .setColor(0x22c55e)
+          .setTitle('Scout Bot Key')
+          .setDescription('**"What is scout?"**\nScout bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Scout makes pulling easy and fast!')
+          .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
 
-    if (interaction.commandName === 'buy') {
-      const embed = new EmbedBuilder()
-        .setColor(0x22c55e)
-        .setTitle('Scout Bot Key')
-        .setDescription('**"What is scout?"**\nScout bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Scout makes pulling easy and fast!')
-        .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
+        const row1 = new ActionRowBuilder<StringSelectMenuBuilder>()
+          .addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('select_key')
+              .setPlaceholder('Choose a key...')
+              .addOptions([
+                { label: 'Lifetime Access', value: 'lifetime', description: '$35.00' },
+                { label: '1 Month Access', value: 'monthly', description: '$20.00' },
+                { label: 'Lifetime Access + Full In Depth Pulling Guide', value: 'lifetime_guide', description: '$45.00' }
+              ])
+          );
 
-      const row1 = {
-        type: 1,
-        components: [
-          {
-            type: 3,
-            custom_id: 'select_key',
-            placeholder: 'Choose a key...',
-            options: [
-              { label: 'Lifetime Access', value: 'lifetime', description: '$35.00' },
-              { label: '1 Month Access', value: 'monthly', description: '$20.00' },
-              { label: 'Lifetime Access + Full In Depth Pulling Guide', value: 'lifetime_guide', description: '$45.00' }
-            ]
-          }
-        ]
-      };
+        const row2 = new ActionRowBuilder<StringSelectMenuBuilder>()
+          .addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('select_payment')
+              .setPlaceholder('Choose a payment method')
+              .addOptions([
+                { label: 'CASHAPP', value: 'cashapp', emoji: '💸' },
+                { label: 'PAYPAL', value: 'paypal', emoji: '🅿️' },
+                { label: 'VENMO', value: 'venmo', emoji: '🇻' },
+                { label: 'CARD', value: 'card', emoji: '💳' },
+                { label: 'BTC', value: 'btc', emoji: '₿' },
+                { label: 'LTC', value: 'ltc', emoji: 'Ł' }
+              ])
+          );
 
-      const row2 = {
-        type: 1,
-        components: [
-          {
-            type: 3,
-            custom_id: 'select_payment',
-            placeholder: 'Choose a payment method',
-            options: [
-              { label: 'CASHAPP', value: 'cashapp', emoji: { name: '💸' } },
-              { label: 'PAYPAL', value: 'paypal', emoji: { name: '🅿️' } },
-              { label: 'VENMO', value: 'venmo', emoji: { name: '🇻' } },
-              { label: 'CARD', value: 'card', emoji: { name: '💳' } },
-              { label: 'BTC', value: 'btc', emoji: { name: '₿' } },
-              { label: 'LTC', value: 'ltc', emoji: { name: 'Ł' } }
-            ]
-          }
-        ]
-      };
-
-      await interaction.reply({ embeds: [embed], components: [row1 as any, row2 as any], ephemeral: true });
-      return;
-    }
-
-    if (interaction.commandName === 'redeem') {
-      const keyStr = interaction.options.getString('key', true);
-      const key = await storage.getKey(keyStr);
-
-      if (!key || key.status === 'redeemed') {
-        await interaction.reply({ content: 'Invalid or already redeemed key.', ephemeral: true });
+        await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
         return;
       }
 
-      const now = new Date();
-      let expiresAt: Date | null = null;
-      if (key.type === 'monthly') expiresAt = new Date(now.setMonth(now.getMonth() + 1));
-      if (key.type === 'weekly') expiresAt = new Date(now.setDate(now.getDate() + 7));
+      if (interaction.commandName === 'redeem') {
+        const keyStr = interaction.options.getString('key', true);
+        const key = await storage.getKey(keyStr);
 
-      await storage.redeemKey(key.id, user.id);
-      await storage.updateUserSubscription(user.id, key.type, expiresAt);
+        if (!key || key.status === 'redeemed') {
+          await interaction.reply({ content: 'Invalid or already redeemed key.', ephemeral: true });
+          return;
+        }
 
-      await interaction.reply({ content: `Successfully redeemed **${key.type}** access!`, ephemeral: true });
-      return;
-    }
+        const now = new Date();
+        let expiresAt: Date | null = null;
+        if (key.type === 'monthly') expiresAt = new Date(now.setMonth(now.getMonth() + 1));
+        if (key.type === 'weekly') expiresAt = new Date(now.setDate(now.getDate() + 7));
+
+        await storage.redeemKey(key.id, user.id);
+        await storage.updateUserSubscription(user.id, key.type, expiresAt);
+
+        await interaction.reply({ content: `Successfully redeemed **${key.type}** access!`, ephemeral: true });
+        return;
+      }
 
     if (!hasAccess) {
       const errorEmbed = new EmbedBuilder()
@@ -225,11 +240,53 @@ export async function startBot() {
         await interaction.reply({ content: 'Unknown command.', ephemeral: true });
     }
     
-    await storage.createLog({
-      userId: user.id,
-      command: interaction.commandName,
-      details: { options: interaction.options.data }
-    });
+    // Handle Button/Select Menu Interactions
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'select_key') {
+        const selectedKey = interaction.values[0];
+        await interaction.reply({ content: `You selected **${selectedKey.replace('_', ' ')}**. Now select a payment method below.`, ephemeral: true });
+      }
+
+      if (interaction.customId === 'select_payment') {
+        const paymentMethod = interaction.values[0];
+        const selectedKey = 'monthly'; // In a real app, track state or use multi-select
+
+        const payEmbed = new EmbedBuilder()
+          .setColor(0x22c55e)
+          .setTitle(`Payment: ${paymentMethod.toUpperCase()}`)
+          .setDescription(`Please send the payment to our ${paymentMethod.toUpperCase()} address.\n\nOnce sent, click the button below to verify your payment and receive your key.`)
+          .addFields({ name: 'Amount', value: '$20.00' });
+
+        const verifyButton = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId(`verify_pay_${paymentMethod}_${selectedKey}`)
+              .setLabel('Verify Payment')
+              .setStyle(ButtonStyle.Success)
+          );
+
+        await interaction.reply({ embeds: [payEmbed], components: [verifyButton], ephemeral: true });
+      }
+    }
+
+    if (interaction.isButton()) {
+      if (interaction.customId.startsWith('verify_pay_')) {
+        const [, , method, type] = interaction.customId.split('_');
+        
+        let user = await storage.getUserByDiscordId(interaction.user.id);
+        if (user) {
+          await interaction.reply({ content: 'Verifying payment... (This may take a few minutes)', ephemeral: true });
+          
+          // Simulation of payment processing
+          setTimeout(async () => {
+            await generateAndGrantKey(user!.id, interaction.user, type);
+            try {
+              await interaction.followUp({ content: 'Payment verified! Check your DMs for the access key.', ephemeral: true });
+            } catch (e) {}
+          }, 3000);
+        }
+      }
+    }
   });
 
   client.login(process.env.DISCORD_TOKEN);
