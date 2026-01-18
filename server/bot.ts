@@ -61,6 +61,9 @@ const commands = [
     .setName('redeem')
     .setDescription('Redeem a key and gain access to the bot')
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('buy')
+    .setDescription('Purchase access to the bot'),
 ];
 
 export async function startBot() {
@@ -97,6 +100,52 @@ export async function startBot() {
     }
 
     const hasAccess = user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
+
+    if (interaction.commandName === 'buy') {
+      const embed = new EmbedBuilder()
+        .setColor(0x22c55e)
+        .setTitle('Scout Bot Key')
+        .setDescription('**"What is scout?"**\nScout bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Scout makes pulling easy and fast!')
+        .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
+
+      const row1 = {
+        type: 1,
+        components: [
+          {
+            type: 3,
+            custom_id: 'select_key',
+            placeholder: 'Choose a key...',
+            options: [
+              { label: 'Lifetime Access', value: 'lifetime', description: '$35.00' },
+              { label: '1 Month Access', value: 'monthly', description: '$20.00' },
+              { label: 'Lifetime Access + Full In Depth Pulling Guide', value: 'lifetime_guide', description: '$45.00' }
+            ]
+          }
+        ]
+      };
+
+      const row2 = {
+        type: 1,
+        components: [
+          {
+            type: 3,
+            custom_id: 'select_payment',
+            placeholder: 'Choose a payment method',
+            options: [
+              { label: 'CASHAPP', value: 'cashapp', emoji: { name: '💸' } },
+              { label: 'PAYPAL', value: 'paypal', emoji: { name: '🅿️' } },
+              { label: 'VENMO', value: 'venmo', emoji: { name: '🇻' } },
+              { label: 'CARD', value: 'card', emoji: { name: '💳' } },
+              { label: 'BTC', value: 'btc', emoji: { name: '₿' } },
+              { label: 'LTC', value: 'ltc', emoji: { name: 'Ł' } }
+            ]
+          }
+        ]
+      };
+
+      await interaction.reply({ embeds: [embed], components: [row1 as any, row2 as any], ephemeral: true });
+      return;
+    }
 
     if (interaction.commandName === 'redeem') {
       const keyStr = interaction.options.getString('key', true);
