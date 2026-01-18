@@ -150,10 +150,10 @@ export async function startBot() {
                 .addOptions([
                   { label: 'CASHAPP', value: 'cashapp', emoji: '💸' },
                   { label: 'PAYPAL', value: 'paypal', emoji: '🅿️' },
-                  { label: 'VENMO', value: 'venmo', emoji: '🇻' },
+                  { label: 'VENMO', value: 'venmo', emoji: '🟦' },
                   { label: 'CARD', value: 'card', emoji: '💳' },
-                  { label: 'BTC', value: 'btc', emoji: '₿' },
-                  { label: 'LTC', value: 'ltc', emoji: 'Ł' }
+                  { label: 'BTC', value: 'btc', emoji: '🪙' },
+                  { label: 'LTC', value: 'ltc', emoji: '💎' }
                 ])
             );
 
