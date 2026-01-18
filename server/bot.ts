@@ -122,8 +122,6 @@ export async function startBot() {
         });
       }
 
-      const hasAccess = user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
-
       if (interaction.commandName === 'buy') {
         const embed = new EmbedBuilder()
           .setColor(0x22c55e)
@@ -183,88 +181,71 @@ export async function startBot() {
         return;
       }
 
-    if (!hasAccess) {
-      const errorEmbed = new EmbedBuilder()
-        .setColor(0xff0000)
-        .setTitle('Invalid Access')
-        .setDescription('No Key Found\nPurchase a key using `/buy` (Available on dashboard)\nMade by Simba');
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-      return;
-    }
+      const hasAccess = user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
+      if (!hasAccess) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xff0000)
+          .setTitle('Invalid Access')
+          .setDescription('No Key Found\nPurchase a key using `/buy` (Available on dashboard)\nMade by Simba');
+        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return;
+      }
 
-    // Command Logic Placeholder for Receipts and Lookups
-    const embed = new EmbedBuilder().setColor(0x22c55e);
-
-    switch (interaction.commandName) {
-      case 'check_xbox':
-        const gt = interaction.options.getString('xbox_name', true);
-        const profile = await xboxService.searchGamertag(gt);
-        if (profile) {
-          embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
-               .addFields({ name: 'Gamerscore', value: profile.gamerScore }, { name: 'XID', value: profile.xid });
+      const embed = new EmbedBuilder().setColor(0x22c55e);
+      switch (interaction.commandName) {
+        case 'check_xbox':
+          const gt = interaction.options.getString('xbox_name', true);
+          const profile = await xboxService.searchGamertag(gt);
+          if (profile) {
+            embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
+                 .addFields({ name: 'Gamerscore', value: profile.gamerScore }, { name: 'XID', value: profile.xid });
+            await interaction.reply({ embeds: [embed] });
+          } else {
+            await interaction.reply({ content: 'Xbox profile not found.', ephemeral: true });
+          }
+          break;
+        case 'xbox_ip':
+        case 'psn_ip':
+          await interaction.reply({ content: 'IP Pulling feature is currently restricted. Contact support for access.', ephemeral: true });
+          break;
+        case 'xbox_stw_receipt':
+        case 'psn_stw_receipt':
+        case 'xbox_vbucks_receipt':
+        case 'psn_vbucks_receipt':
+          embed.setTitle('Receipt Generated Successfully').setDescription('Your requested receipt has been generated and sent to your DM (Placeholder).');
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+          break;
+        case 'xbox_aov':
+        case 'psn_aov':
+          embed.setTitle('AOV Created').setDescription('Account Ownership Verification (AOV) has been initiated.');
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+          break;
+        case 'iplookup':
+          const ip = interaction.options.getString('ip', true);
+          embed.setTitle(`IP Lookup: ${ip}`).setDescription('Location: (Leaked database lookup simulated)\nCity: Brisbane\nCountry: Australia');
           await interaction.reply({ embeds: [embed] });
-        } else {
-          await interaction.reply({ content: 'Xbox profile not found.', ephemeral: true });
-        }
-        break;
-
-      case 'xbox_ip':
-      case 'psn_ip':
-        await interaction.reply({ content: 'IP Pulling feature is currently restricted. Contact support for access.', ephemeral: true });
-        break;
-
-      case 'xbox_stw_receipt':
-      case 'psn_stw_receipt':
-      case 'xbox_vbucks_receipt':
-      case 'psn_vbucks_receipt':
-        embed.setTitle('Receipt Generated Successfully')
-             .setDescription('Your requested receipt has been generated and sent to your DM (Placeholder).');
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-        break;
-      
-      case 'xbox_aov':
-      case 'psn_aov':
-        embed.setTitle('AOV Created')
-             .setDescription('Account Ownership Verification (AOV) has been initiated.');
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-        break;
-
-      case 'iplookup':
-        const ip = interaction.options.getString('ip', true);
-        embed.setTitle(`IP Lookup: ${ip}`)
-             .setDescription('Location: (Leaked database lookup simulated)\nCity: Brisbane\nCountry: Australia');
-        await interaction.reply({ embeds: [embed] });
-        break;
-
-      default:
-        await interaction.reply({ content: 'Unknown command.', ephemeral: true });
+          break;
+        default:
+          await interaction.reply({ content: 'Unknown command.', ephemeral: true });
+      }
     }
-    
-    // Handle Button/Select Menu Interactions
+
     if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'select_key') {
         const selectedKey = interaction.values[0];
         await interaction.reply({ content: `You selected **${selectedKey.replace('_', ' ')}**. Now select a payment method below.`, ephemeral: true });
       }
-
       if (interaction.customId === 'select_payment') {
         const paymentMethod = interaction.values[0];
-        const selectedKey = 'monthly'; // In a real app, track state or use multi-select
-
+        const selectedKey = 'monthly'; 
         const payEmbed = new EmbedBuilder()
           .setColor(0x22c55e)
           .setTitle(`Payment: ${paymentMethod.toUpperCase()}`)
           .setDescription(`Please send the payment to our ${paymentMethod.toUpperCase()} address.\n\nOnce sent, click the button below to verify your payment and receive your key.`)
           .addFields({ name: 'Amount', value: '$20.00' });
-
-        const verifyButton = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`verify_pay_${paymentMethod}_${selectedKey}`)
-              .setLabel('Verify Payment')
-              .setStyle(ButtonStyle.Success)
-          );
-
+        const verifyButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setCustomId(`verify_pay_${paymentMethod}_${selectedKey}`).setLabel('Verify Payment').setStyle(ButtonStyle.Success)
+        );
         await interaction.reply({ embeds: [payEmbed], components: [verifyButton], ephemeral: true });
       }
     }
@@ -272,12 +253,9 @@ export async function startBot() {
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('verify_pay_')) {
         const [, , method, type] = interaction.customId.split('_');
-        
         let user = await storage.getUserByDiscordId(interaction.user.id);
         if (user) {
           await interaction.reply({ content: 'Verifying payment... (This may take a few minutes)', ephemeral: true });
-          
-          // Simulation of payment processing
           setTimeout(async () => {
             await generateAndGrantKey(user!.id, interaction.user, type);
             try {
