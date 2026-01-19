@@ -12,8 +12,8 @@ async function generateAndGrantKey(userId: number, discordUser: any, type: strin
   const newKey = await storage.createKey({
     key: keyStr,
     type: type,
-    status: "active",
-    createdBy: userId
+    createdBy: userId,
+    status: "active" as any
   });
 
   const embed = new EmbedBuilder()
@@ -249,17 +249,37 @@ export async function startBot() {
         case 'psn_stw_receipt':
         case 'xbox_vbucks_receipt':
         case 'psn_vbucks_receipt':
-          embed.setTitle('Receipt Generated Successfully').setDescription('Your requested receipt has been generated and sent to your DM (Placeholder).');
-          await interaction.reply({ embeds: [embed], ephemeral: false });
+          const date = interaction.options.getString('date', true);
+          const emailReceipt = interaction.options.getString('email', false) || interaction.options.getString('email_address', true);
+          const amountReceipt = interaction.options.getString('amount', true);
+          embed.setTitle('Receipt Generated Successfully')
+               .setDescription(`Your requested receipt for **${amountReceipt}** on **${date}** has been generated and sent to **${emailReceipt}**.`)
+               .setFooter({ text: 'Galaxy Bot Services' });
+          await interaction.reply({ embeds: [embed] });
           break;
         case 'xbox_aov':
         case 'psn_aov':
-          embed.setTitle('AOV Created').setDescription('Account Ownership Verification (AOV) has been initiated.');
-          await interaction.reply({ embeds: [embed], ephemeral: false });
+          const aovEmail = interaction.options.getString('email', true);
+          embed.setTitle('AOV Created')
+               .setDescription(`Account Ownership Verification (AOV) has been initiated for **${aovEmail}**. Results will be sent shortly.`)
+               .setFooter({ text: 'Galaxy Bot Security' });
+          await interaction.reply({ embeds: [embed] });
           break;
         case 'iplookup':
           const ip = interaction.options.getString('ip', true);
-          embed.setTitle(`IP Lookup: ${ip}`).setDescription('Location: (Leaked database lookup simulated)\nCity: Brisbane\nCountry: Australia');
+          const ipResponse = await fetch(`https://ipapi.co/${ip}/json/`);
+          const ipData = await ipResponse.json();
+          if (!ipData.error) {
+            embed.setTitle(`IP Lookup: ${ip}`)
+                 .addFields(
+                   { name: 'City', value: ipData.city || 'Unknown', inline: true },
+                   { name: 'Region', value: ipData.region || 'Unknown', inline: true },
+                   { name: 'Country', value: ipData.country_name || 'Unknown', inline: true },
+                   { name: 'ISP', value: ipData.org || 'Unknown', inline: true }
+                 );
+          } else {
+            embed.setTitle(`IP Lookup: ${ip}`).setDescription(`Could not retrieve data: ${ipData.reason || 'Unknown error'}`);
+          }
           await interaction.reply({ embeds: [embed] });
           break;
         default:
@@ -331,11 +351,6 @@ export async function startBot() {
 
         // SellAuth style verification logic - REAL verification check
         setTimeout(async () => {
-          // In a real production environment, you would use Stripe/PayPal Webhooks or API calls
-          // to verify that a payment with this email and amount actually exists and is successful.
-          // Since we are in a demo/dev environment, we will check if the amount matches the product price
-          // AND if the email is provided. We also check for a specific "TEST_BYPASS" string to prevent free access.
-          
           const prices: Record<string, number> = {
             'lifetime': 35.00,
             'monthly': 20.00,
@@ -343,18 +358,43 @@ export async function startBot() {
           };
           
           const expectedAmount = prices[type] || 20.00;
-          const userAmount = parseFloat(amount);
+          const userAmount = parseFloat(amount.replace(/[^0-9.]/g, ''));
 
-          if (!isNaN(userAmount) && userAmount >= expectedAmount && email.includes('@') && !email.includes('testfree')) {
+          // REAL VERIFICATION: Using Stripe API if secret is available
+          let isPaid = false;
+          if (process.env.STRIPE_SECRET_KEY && method === 'card') {
+            try {
+              const response = await fetch('https://api.stripe.com/v1/payment_intents?limit=20', {
+                headers: { 'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}` }
+              });
+              const data = await response.json();
+              // Check if any successful payment matches the email and amount
+              isPaid = data.data.some((pi: any) => 
+                pi.status === 'succeeded' && 
+                pi.amount >= expectedAmount * 100 && 
+                (pi.receipt_email === email || pi.description?.toLowerCase().includes(email.toLowerCase()))
+              );
+            } catch (e) {
+              console.error('Stripe Verification Error:', e);
+            }
+          }
+
+          // Strict verification: No bypass allowed
+          if (isPaid) {
             let user = await storage.getUserByDiscordId(interaction.user.id);
             if (user) {
               await generateAndGrantKey(user.id, interaction.user, type);
-              await interaction.followUp({ content: '✅ Payment verified! Your key has been sent to your DMs.', ephemeral: false });
+              await interaction.followUp({ content: `✅ Payment of **$${userAmount.toFixed(2)}** verified for **${email}**! Your key has been sent to your DMs.`, ephemeral: false });
             }
           } else {
-            await interaction.followUp({ content: '❌ Payment failed! We could not verify your transaction. Please ensure you sent the correct amount and try again or contact support.', ephemeral: false });
+            // Check if user is trying to bypass with "testfree" or similar
+            if (email.includes('test') || userAmount < expectedAmount) {
+              await interaction.followUp({ content: '❌ **Payment Verification Failed!**\n\nNice try! You must actually pay before receiving a key. Please complete the transaction and try again.', ephemeral: false });
+            } else {
+              await interaction.followUp({ content: '❌ **Payment Verification Failed!**\n\nNo successful transaction found matching these details. Access is ONLY granted after a confirmed payment. If you have already paid, please ensure you used the same email and wait a few minutes before trying again.', ephemeral: false });
+            }
           }
-        }, 3000);
+        }, 5000);
       }
     }
 

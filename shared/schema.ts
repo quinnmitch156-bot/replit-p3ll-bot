@@ -31,7 +31,7 @@ export const logs = pgTable("logs", {
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
-export const insertKeySchema = createInsertSchema(keys).omit({ id: true, createdAt: true, redeemedBy: true, status: true });
+export const insertKeySchema = createInsertSchema(keys).omit({ id: true, createdAt: true, redeemedBy: true });
 export const insertLogSchema = createInsertSchema(logs).omit({ id: true, createdAt: true });
 
 export type User = typeof users.$inferSelect;
