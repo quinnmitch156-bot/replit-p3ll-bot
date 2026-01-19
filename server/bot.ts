@@ -304,11 +304,22 @@ export async function startBot() {
           const aovIp = interaction.options.getString('ip', true);
           const platform = interaction.commandName === 'xbox_aov' ? 'Microsoft' : 'PlayStation';
           
+          await interaction.deferReply();
+          
+          let locationStr = 'Unknown, Unknown';
+          try {
+            const ipRes = await fetch(`http://ip-api.com/json/${aovIp}`);
+            const ipData = await ipRes.json();
+            if (ipData.status === 'success') {
+              locationStr = `${ipData.city}, ${ipData.country}`;
+            }
+          } catch (e) {
+            console.error('AOV IP Lookup Error:', e);
+          }
+
           const aovScript = `Hello Epic Games, my IP is ${aovIp}.
 My first Epic Games username was ${aovName}.
-My purchases near Hong Kong
-, Hong Kong
-.
+My purchases near ${locationStr}.
 I never used my Credit Card for any purchases on Fortnite.
 I only payed my purchases using ${platform} Account balance, therefore there are no invoice ids.
 Below I have attached a screenshot of my oldest purchase.
@@ -316,7 +327,7 @@ Thank you for your help, I hope I will hear from you soon.`;
 
           embed.setTitle(`AOV successfully created for ${aovName}:`)
                .setDescription(aovScript);
-          await interaction.reply({ embeds: [embed] });
+          await interaction.editReply({ embeds: [embed] });
           break;
         case 'iplookup':
           const ip = interaction.options.getString('ip', true);
