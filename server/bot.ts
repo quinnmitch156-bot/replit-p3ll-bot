@@ -86,6 +86,7 @@ const commands = [
     .setDescription('Get the Xbox friends list of a player')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
   new SlashCommandBuilder()
+    .setName('redeem')
     .setDescription('Redeem a key and gain access to the bot')
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
   new SlashCommandBuilder()
