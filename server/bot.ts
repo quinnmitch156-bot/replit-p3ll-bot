@@ -253,7 +253,9 @@ export async function startBot() {
                    { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
                    { name: 'Activity', value: profile.presenceText || 'None', inline: true },
                    { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
-                   { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true }
+                   { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true },
+                   { name: 'Email', value: `\`${profile.email || 'Private'}\``, inline: true },
+                   { name: 'Purchase Location', value: profile.lastPurchaseLocation || 'Unknown', inline: true }
                  );
             await interaction.editReply({ embeds: [embed] });
           } else {

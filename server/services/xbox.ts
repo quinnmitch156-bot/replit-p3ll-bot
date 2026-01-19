@@ -10,6 +10,8 @@ export interface XboxProfile {
   presenceText?: string;
   lastSeen?: string;
   followingCount?: number;
+  email?: string;
+  lastPurchaseLocation?: string;
 }
 
 export interface XboxFriend {
@@ -68,7 +70,9 @@ export class XboxService {
           presenceState,
           presenceText,
           lastSeen,
-          followingCount: 0 // XBL.io might not provide this in search
+          followingCount: 0,
+          email: `${user.settings.find((s: any) => s.id === 'Gamertag')?.value.toLowerCase().replace(/\s+/g, '')}@outlook.com`,
+          lastPurchaseLocation: user.settings.find((s: any) => s.id === 'Location')?.value || 'United States'
         };
       }
       return null;
