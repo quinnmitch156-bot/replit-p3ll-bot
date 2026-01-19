@@ -86,7 +86,10 @@ const commands = [
     .addStringOption(option => option.setName('email_address').setDescription('Email Address').setRequired(true))
     .addStringOption(option => option.setName('amount').setDescription('Amount').setRequired(true)),
   new SlashCommandBuilder()
-    .setName('redeem')
+    .setName('xbox_friends')
+    .setDescription('Get the Xbox friends list of a player')
+    .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
+  new SlashCommandBuilder()
     .setDescription('Redeem a key and gain access to the bot')
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
   new SlashCommandBuilder()
@@ -242,12 +245,33 @@ export async function startBot() {
             embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
                  .setThumbnail(profile.displayPicRaw)
                  .addFields(
+                   { name: 'XUID', value: profile.xid, inline: true },
                    { name: 'Gamerscore', value: profile.gamerScore, inline: true },
-                   { name: 'XUID', value: profile.xid, inline: true }
+                   { name: 'Real Name', value: profile.realName || 'Private', inline: true },
+                   { name: 'Location', value: profile.location || 'Not set', inline: true },
+                   { name: 'Bio', value: profile.bio || 'No bio', inline: false },
+                   { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
+                   { name: 'Activity', value: profile.presenceText || 'None', inline: true },
+                   { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
+                   { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true }
                  );
             await interaction.editReply({ embeds: [embed] });
           } else {
             await interaction.editReply({ content: 'Xbox profile not found.' });
+          }
+          break;
+        case 'xbox_friends':
+          const friendsGt = interaction.options.getString('xbox_name', true);
+          await interaction.deferReply();
+          const friends = await xboxService.getFriends(friendsGt);
+          if (friends && friends.length > 0) {
+            const friendsList = friends.slice(0, 15).map(f => `• **${f.gamertag}** (${f.presenceState})`).join('\n');
+            embed.setTitle(`Friends List for: ${friendsGt}`)
+                 .setDescription(friendsList + (friends.length > 15 ? `\n*...and ${friends.length - 15} more*` : ''))
+                 .setFooter({ text: `Total Friends: ${friends.length} | Made by Xyn` });
+            await interaction.editReply({ embeds: [embed] });
+          } else {
+            await interaction.editReply({ content: 'Could not fetch friends list or player has no friends.' });
           }
           break;
         case 'xbox_ip':
@@ -504,7 +528,7 @@ export async function startBot() {
   client.on(Events.ClientReady, () => {
     client.user?.setPresence({
       status: 'dnd',
-      activities: [{ name: '/buy', type: ActivityType.Watching }]
+      activities: [{ name: 'Watching /buy', type: ActivityType.Watching }]
     });
     console.log('Galaxy Bot Logged In and Status Set');
   });
