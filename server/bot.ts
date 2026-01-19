@@ -126,6 +126,13 @@ export async function startBot() {
         });
       }
 
+      // Log Command
+      await storage.createLog({
+        userId: user.id,
+        command: interaction.commandName,
+        details: interaction.options.data.reduce((acc, opt) => ({ ...acc, [opt.name]: opt.value }), {})
+      });
+
       if (interaction.commandName === 'buy') {
         try {
           const embed = new EmbedBuilder()
@@ -288,6 +295,15 @@ export async function startBot() {
     }
 
     if (interaction.isStringSelectMenu()) {
+      let user = await storage.getUserByDiscordId(interaction.user.id);
+      if (user) {
+        await storage.createLog({
+          userId: user.id,
+          command: `select_${interaction.customId}`,
+          details: { values: interaction.values }
+        });
+      }
+
       if (interaction.customId === 'select_key') {
         const selectedKey = interaction.values[0];
         await interaction.reply({ content: `You selected **${selectedKey.replace('_', ' ')}**. Now select a payment method below.`, ephemeral: false });
@@ -343,6 +359,15 @@ export async function startBot() {
     }
 
     if (interaction.isModalSubmit()) {
+      let user = await storage.getUserByDiscordId(interaction.user.id);
+      if (user) {
+        await storage.createLog({
+          userId: user.id,
+          command: `modal_${interaction.customId}`,
+          details: interaction.fields.fields.reduce((acc, field) => ({ ...acc, [field.customId]: field.value }), {})
+        });
+      }
+
       if (interaction.customId.startsWith('verify_modal_')) {
         const [, , method, type] = interaction.customId.split('_');
         const email = interaction.fields.getTextInputValue('email');
@@ -403,6 +428,15 @@ export async function startBot() {
     }
 
     if (interaction.isButton()) {
+      let user = await storage.getUserByDiscordId(interaction.user.id);
+      if (user) {
+        await storage.createLog({
+          userId: user.id,
+          command: `button_${interaction.customId}`,
+          details: {}
+        });
+      }
+
       if (interaction.customId.startsWith('show_modal_')) {
         const method = interaction.customId.split('_')[2];
         const selectedKey = 'monthly'; // Should ideally be tracked
