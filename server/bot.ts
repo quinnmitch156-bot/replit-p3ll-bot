@@ -32,6 +32,10 @@ async function generateAndGrantKey(userId: number, discordUser: any, type: strin
 
 const commands = [
   new SlashCommandBuilder()
+    .setName('lookup')
+    .setDescription('Look up Fortnite player stats')
+    .addStringOption(option => option.setName('username').setDescription('Fortnite username').setRequired(true)),
+  new SlashCommandBuilder()
     .setName('check_xbox')
     .setDescription('(BUGGY) Checks if a Xbox profile is valid and provides the Profile links')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
@@ -198,15 +202,43 @@ export async function startBot() {
 
       const embed = new EmbedBuilder().setColor(0x22c55e);
       switch (interaction.commandName) {
+        case 'lookup':
+          const username = interaction.options.getString('username', true);
+          await interaction.deferReply();
+          const accountId = await fortniteService.lookup(username);
+          if (accountId) {
+            const stats = await fortniteService.getStats(accountId);
+            if (stats) {
+              embed.setTitle(`Fortnite Stats: ${stats.account.name}`)
+                .addFields(
+                  { name: 'Level', value: stats.global.battle_pass.level.toString(), inline: true },
+                  { name: 'Wins', value: stats.global.all.wins.toString(), inline: true },
+                  { name: 'K/D', value: stats.global.all.kd.toString(), inline: true },
+                  { name: 'Matches', value: stats.global.all.matchesplayed.toString(), inline: true },
+                  { name: 'Win Rate', value: `${stats.global.all.winrate}%`, inline: true }
+                );
+              await interaction.editReply({ embeds: [embed] });
+            } else {
+              await interaction.editReply({ content: 'Could not fetch stats for this account.' });
+            }
+          } else {
+            await interaction.editReply({ content: 'Account not found.' });
+          }
+          break;
         case 'check_xbox':
           const gt = interaction.options.getString('xbox_name', true);
+          await interaction.deferReply();
           const profile = await xboxService.searchGamertag(gt);
           if (profile) {
             embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
-                 .addFields({ name: 'Gamerscore', value: profile.gamerScore }, { name: 'XID', value: profile.xid });
-            await interaction.reply({ embeds: [embed] });
+                 .setThumbnail(profile.displayPicRaw)
+                 .addFields(
+                   { name: 'Gamerscore', value: profile.gamerScore, inline: true },
+                   { name: 'XID', value: profile.xid, inline: true }
+                 );
+            await interaction.editReply({ embeds: [embed] });
           } else {
-            await interaction.reply({ content: 'Xbox profile not found.', ephemeral: false });
+            await interaction.editReply({ content: 'Xbox profile not found.' });
           }
           break;
         case 'xbox_ip':
