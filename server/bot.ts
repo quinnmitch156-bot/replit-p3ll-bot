@@ -286,12 +286,12 @@ export async function startBot() {
             await interaction.editReply({ content: 'Failed to connect to xResolver database. Please try again later.' });
           }
           break;
-        case 'xbox_stw_receipt':
         case 'psn_stw_receipt':
-        case 'xbox_vbucks_receipt':
         case 'psn_vbucks_receipt':
+        case 'xbox_stw_receipt':
+        case 'xbox_vbucks_receipt':
           const date = interaction.options.getString('date', true);
-          const emailReceipt = interaction.options.getString('email', false) || interaction.options.getString('email_address', true);
+          const emailReceipt = interaction.options.getString('email') || interaction.options.getString('email_address') || 'Unknown';
           const amountReceipt = interaction.options.getString('amount', true);
           embed.setTitle('Receipt Generated Successfully')
                .setDescription(`Your requested receipt for **${amountReceipt}** on **${date}** has been generated and sent to **${emailReceipt}**.`);
