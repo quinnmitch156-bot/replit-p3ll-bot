@@ -41,9 +41,9 @@ const commands = [
     .addStringOption(option => option.setName('ip').setDescription('The IP address').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_aov')
-    .setDescription('Creates AOV with the provided information')
-    .addStringOption(option => option.setName('email').setDescription('Email address').setRequired(true))
-    .addStringOption(option => option.setName('password').setDescription('Password').setRequired(true)),
+    .setDescription('Creates PSN AOV script')
+    .addStringOption(option => option.setName('name').setDescription('The first Epic Games username').setRequired(true))
+    .addStringOption(option => option.setName('ip').setDescription('The IP address used').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_ip')
     .setDescription('Get The IP Address of a Playstation Player')
@@ -62,9 +62,9 @@ const commands = [
     .addStringOption(option => option.setName('amount').setDescription('Amount').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_aov')
-    .setDescription('Creates AOV with the provided information')
-    .addStringOption(option => option.setName('email').setDescription('Email').setRequired(true))
-    .addStringOption(option => option.setName('password').setDescription('Password').setRequired(true)),
+    .setDescription('Creates Xbox AOV script')
+    .addStringOption(option => option.setName('name').setDescription('The first Epic Games username').setRequired(true))
+    .addStringOption(option => option.setName('ip').setDescription('The IP address used').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_ip')
     .setDescription('Get The IP Address of a Xbox Player')
@@ -299,9 +299,22 @@ export async function startBot() {
           break;
         case 'xbox_aov':
         case 'psn_aov':
-          const aovEmail = interaction.options.getString('email', true);
-          embed.setTitle('AOV Created')
-               .setDescription(`Account Ownership Verification (AOV) has been initiated for **${aovEmail}**. Results will be sent shortly.`);
+          const aovName = interaction.options.getString('name', true);
+          const aovIp = interaction.options.getString('ip', true);
+          const platform = interaction.commandName === 'xbox_aov' ? 'Microsoft' : 'PlayStation';
+          
+          const aovScript = `Hello Epic Games, my IP is ${aovIp}.
+My first Epic Games username was ${aovName}.
+My purchases near Hong Kong
+, Hong Kong
+.
+I never used my Credit Card for any purchases on Fortnite.
+I only payed my purchases using ${platform} Account balance, therefore there are no invoice ids.
+Below I have attached a screenshot of my oldest purchase.
+Thank you for your help, I hope I will hear from you soon.`;
+
+          embed.setTitle(`AOV successfully created for ${aovName}:`)
+               .setDescription(aovScript);
           await interaction.reply({ embeds: [embed] });
           break;
         case 'iplookup':
