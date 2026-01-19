@@ -243,7 +243,7 @@ export async function startBot() {
                  .setThumbnail(profile.displayPicRaw)
                  .addFields(
                    { name: 'Gamerscore', value: profile.gamerScore, inline: true },
-                   { name: 'XID', value: profile.xid, inline: true }
+                   { name: 'XUID', value: profile.xid, inline: true }
                  );
             await interaction.editReply({ embeds: [embed] });
           } else {
