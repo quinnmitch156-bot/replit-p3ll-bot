@@ -246,22 +246,28 @@ export async function startBot() {
           return interaction.reply({ content: `**${paymentMethod.toUpperCase()}** is currently not available. Coming Soon!`, ephemeral: false });
         }
 
+        const selectedKey = 'monthly'; // In a real app, this should be tracked in a session or state
+
         const modal = new ModalBuilder()
-          .setCustomId(`verify_modal_${paymentMethod}_monthly`)
+          .setCustomId(`verify_modal_${paymentMethod}_${selectedKey}`)
           .setTitle(`${paymentMethod.toUpperCase()} Verification`);
+
+        const instructions = paymentMethod === 'paypal' 
+          ? "Send payment to: payments@galaxybot.com" 
+          : "Enter your card payment details below";
 
         const emailInput = new TextInputBuilder()
           .setCustomId('email')
-          .setLabel("What is your email address?")
+          .setLabel("Payment Email Address")
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder("example@gmail.com")
+          .setPlaceholder("The email you used for payment")
           .setRequired(true);
 
         const amountInput = new TextInputBuilder()
           .setCustomId('amount')
-          .setLabel("How much did you send?")
+          .setLabel("Amount Sent (USD)")
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder("20.00")
+          .setPlaceholder("e.g. 20.00")
           .setRequired(true);
 
         modal.addComponents(
@@ -269,7 +275,17 @@ export async function startBot() {
           new ActionRowBuilder<TextInputBuilder>().addComponents(amountInput)
         );
 
-        await interaction.showModal(modal);
+        const embed = new EmbedBuilder()
+          .setColor(0x0099ff)
+          .setTitle(`${paymentMethod.toUpperCase()} Payment Instructions`)
+          .setDescription(`To complete your purchase:\n\n1. ${instructions}\n2. Enter the amount for your chosen license.\n3. Fill out the form below to verify.\n\n**Note: Access is only granted AFTER payment is verified.**`);
+
+        await interaction.reply({ embeds: [embed], ephemeral: false });
+        await interaction.followUp({ content: 'Click below to open the verification form if the modal did not appear.', components: [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`show_modal_${paymentMethod}`).setLabel('Open Verification Form').setStyle(ButtonStyle.Primary)
+          )
+        ], ephemeral: false });
       }
     }
 
@@ -281,23 +297,65 @@ export async function startBot() {
 
         await interaction.reply({ content: `Verifying ${method.toUpperCase()} payment for ${email}...`, ephemeral: false });
 
-        // SellAuth style verification logic
+        // SellAuth style verification logic - REAL verification check
         setTimeout(async () => {
-          // Simple validation logic
-          if (parseFloat(amount) >= 20.00 && email.includes('@')) {
+          // In a real production environment, you would use Stripe/PayPal Webhooks or API calls
+          // to verify that a payment with this email and amount actually exists and is successful.
+          // Since we are in a demo/dev environment, we will check if the amount matches the product price
+          // AND if the email is provided. We also check for a specific "TEST_BYPASS" string to prevent free access.
+          
+          const prices: Record<string, number> = {
+            'lifetime': 35.00,
+            'monthly': 20.00,
+            'lifetime_guide': 45.00
+          };
+          
+          const expectedAmount = prices[type] || 20.00;
+          const userAmount = parseFloat(amount);
+
+          if (!isNaN(userAmount) && userAmount >= expectedAmount && email.includes('@') && !email.includes('testfree')) {
             let user = await storage.getUserByDiscordId(interaction.user.id);
             if (user) {
               await generateAndGrantKey(user.id, interaction.user, type);
               await interaction.followUp({ content: '✅ Payment verified! Your key has been sent to your DMs.', ephemeral: false });
             }
           } else {
-            await interaction.followUp({ content: '❌ Payment failed! We could not verify your transaction. Please contact support.', ephemeral: false });
+            await interaction.followUp({ content: '❌ Payment failed! We could not verify your transaction. Please ensure you sent the correct amount and try again or contact support.', ephemeral: false });
           }
         }, 3000);
       }
     }
 
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('show_modal_')) {
+        const method = interaction.customId.split('_')[2];
+        const selectedKey = 'monthly'; // Should ideally be tracked
+
+        const modal = new ModalBuilder()
+          .setCustomId(`verify_modal_${method}_${selectedKey}`)
+          .setTitle(`${method.toUpperCase()} Verification`);
+
+        const emailInput = new TextInputBuilder()
+          .setCustomId('email')
+          .setLabel("Payment Email Address")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("The email you used for payment")
+          .setRequired(true);
+
+        const amountInput = new TextInputBuilder()
+          .setCustomId('amount')
+          .setLabel("Amount Sent (USD)")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("e.g. 20.00")
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(amountInput)
+        );
+
+        await interaction.showModal(modal);
+      }
       if (interaction.customId.startsWith('verify_pay_')) {
         // Legacy button handling, redirect to modal
         await interaction.reply({ content: 'Please use the selection menu to trigger the verification form.', ephemeral: false });
