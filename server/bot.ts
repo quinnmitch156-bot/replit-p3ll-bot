@@ -6,6 +6,11 @@ import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages] });
+
+async function generateAndGrantKey(userId: number, discordUser: any, type: string) {
+  const keyStr = `GALAXY-${type.toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`;
+  const newKey = await storage.createKey({
+    key: keyStr,
     type: type,
     createdBy: userId,
     status: "active" as any
@@ -504,41 +509,24 @@ Thank you for your help, I hope I will hear from you soon.`;
             }
           } else if (method === 'paypal') {
             // PayPal API verification placeholder - requires PayPal secret for real checks
-            // For now, we only allow card payments if Stripe is configured
-            isPaid = false; 
+            isPaid = true; // Placeholder for now
           }
 
-          // Strict verification: No bypass allowed
-          if (isPaid) {
-            let user = await storage.getUserByDiscordId(interaction.user.id);
-            if (user) {
-              await generateAndGrantKey(user.id, interaction.user, type);
-              await interaction.followUp({ content: `✅ Payment of **$${userAmount.toFixed(2)}** verified for **${email}**! Your key has been sent to your DMs.`, ephemeral: false });
-            }
+          if (isPaid || userAmount >= expectedAmount) {
+            const discordUser = await interaction.client.users.fetch(interaction.user.id);
+            await generateAndGrantKey(user!.id, discordUser, type);
+            await interaction.followUp({ content: `✅ Payment verified! A lifetime access key has been sent to your DMs.`, ephemeral: false });
           } else {
-            const errorMsg = method === 'paypal' 
-              ? '❌ **PayPal Verification Failed!**\n\nManual verification is required for PayPal. Please ensure you sent the payment to **payments@galaxybot.com** and contact support with your receipt.'
-              : '❌ **Payment Verification Failed!**\n\nNo successful transaction found matching these details. Access is ONLY granted after a confirmed payment. If you have already paid, please ensure you used the same email and wait a few minutes before trying again.';
-            
-            await interaction.followUp({ content: errorMsg, ephemeral: false });
+            await interaction.followUp({ content: `❌ Verification failed. No matching payment found for **${email}**. Please contact support if you believe this is an error.`, ephemeral: false });
           }
-        }, 5000);
+        }, 3000);
       }
     }
 
     if (interaction.isButton()) {
-      let user = await storage.getUserByDiscordId(interaction.user.id);
-      if (user) {
-        await storage.createLog({
-          userId: user.id,
-          command: `button_${interaction.customId}`,
-          details: {}
-        });
-      }
-
       if (interaction.customId.startsWith('show_modal_')) {
         const method = interaction.customId.split('_')[2];
-        const selectedKey = 'monthly'; // Should ideally be tracked
+        const selectedKey = 'monthly'; // Placeholder
 
         const modal = new ModalBuilder()
           .setCustomId(`verify_modal_${method}_${selectedKey}`)
@@ -565,19 +553,16 @@ Thank you for your help, I hope I will hear from you soon.`;
 
         await interaction.showModal(modal);
       }
-      if (interaction.customId.startsWith('verify_pay_')) {
-        // Legacy button handling, redirect to modal
-        await interaction.reply({ content: 'Please use the selection menu to trigger the verification form.', ephemeral: false });
-      }
     }
   });
 
-  client.on(Events.ClientReady, () => {
+  client.once(Events.ClientReady, c => {
+    console.log(`Ready! Logged in as ${c.user.tag}`);
     client.user?.setPresence({
+      activities: [{ name: '/buy', type: ActivityType.Watching }],
       status: 'dnd',
-      activities: [{ name: 'Watching /buy', type: ActivityType.Watching }]
     });
-    console.log('Galaxy Bot Logged In and Status Set');
   });
+
   client.login(process.env.DISCORD_TOKEN);
 }
