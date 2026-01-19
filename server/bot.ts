@@ -364,7 +364,7 @@ export async function startBot() {
           let isPaid = false;
           if (process.env.STRIPE_SECRET_KEY && method === 'card') {
             try {
-              const response = await fetch('https://api.stripe.com/v1/payment_intents?limit=20', {
+              const response = await fetch('https://api.stripe.com/v1/payment_intents?limit=50', {
                 headers: { 'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}` }
               });
               const data = await response.json();
@@ -372,11 +372,15 @@ export async function startBot() {
               isPaid = data.data.some((pi: any) => 
                 pi.status === 'succeeded' && 
                 pi.amount >= expectedAmount * 100 && 
-                (pi.receipt_email === email || pi.description?.toLowerCase().includes(email.toLowerCase()))
+                (pi.receipt_email === email || (pi.description && pi.description.toLowerCase().includes(email.toLowerCase())))
               );
             } catch (e) {
               console.error('Stripe Verification Error:', e);
             }
+          } else if (method === 'paypal') {
+            // PayPal API verification placeholder - requires PayPal secret for real checks
+            // For now, we only allow card payments if Stripe is configured
+            isPaid = false; 
           }
 
           // Strict verification: No bypass allowed
@@ -387,12 +391,11 @@ export async function startBot() {
               await interaction.followUp({ content: `✅ Payment of **$${userAmount.toFixed(2)}** verified for **${email}**! Your key has been sent to your DMs.`, ephemeral: false });
             }
           } else {
-            // Check if user is trying to bypass with "testfree" or similar
-            if (email.includes('test') || userAmount < expectedAmount) {
-              await interaction.followUp({ content: '❌ **Payment Verification Failed!**\n\nNice try! You must actually pay before receiving a key. Please complete the transaction and try again.', ephemeral: false });
-            } else {
-              await interaction.followUp({ content: '❌ **Payment Verification Failed!**\n\nNo successful transaction found matching these details. Access is ONLY granted after a confirmed payment. If you have already paid, please ensure you used the same email and wait a few minutes before trying again.', ephemeral: false });
-            }
+            const errorMsg = method === 'paypal' 
+              ? '❌ **PayPal Verification Failed!**\n\nManual verification is required for PayPal. Please ensure you sent the payment to **payments@galaxybot.com** and contact support with your receipt.'
+              : '❌ **Payment Verification Failed!**\n\nNo successful transaction found matching these details. Access is ONLY granted after a confirmed payment. If you have already paid, please ensure you used the same email and wait a few minutes before trying again.';
+            
+            await interaction.followUp({ content: errorMsg, ephemeral: false });
           }
         }, 5000);
       }
