@@ -44,6 +44,7 @@ export class XboxService {
         let presenceState = 'Offline';
         let presenceText = 'None';
         let lastSeen = '';
+        let followingCount = 0;
         
         try {
           const presenceRes = await fetch(`${this.baseUrl}/presence/${user.id}`, {
@@ -55,8 +56,17 @@ export class XboxService {
             presenceText = presenceData.lastSeen?.titleName || 'None';
             lastSeen = presenceData.lastSeen?.timestamp || '';
           }
+          
+          // Fetch follower/following counts
+          const summaryRes = await fetch(`${this.baseUrl}/profile/summary/${user.id}`, {
+            headers: { 'X-Authorization': this.apiKey }
+          });
+          if (summaryRes.ok) {
+            const summaryData = await summaryRes.json();
+            followingCount = summaryData.following || 0;
+          }
         } catch (e) {
-          console.error('Xbox Presence Error:', e);
+          console.error('Xbox Details Error:', e);
         }
 
         return {
@@ -70,7 +80,7 @@ export class XboxService {
           presenceState,
           presenceText,
           lastSeen,
-          followingCount: 0,
+          followingCount,
           email: `${user.settings.find((s: any) => s.id === 'Gamertag')?.value.toLowerCase().replace(/\s+/g, '')}@outlook.com`,
           lastPurchaseLocation: user.settings.find((s: any) => s.id === 'Location')?.value || 'United States'
         };
