@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
@@ -440,5 +440,11 @@ export async function startBot() {
   });
 
   client.login(process.env.DISCORD_TOKEN);
-  console.log('Galaxy Bot Logged In');
+  client.on('ready', () => {
+    client.user?.setPresence({
+      status: 'dnd',
+      activities: [{ name: '/buy', type: ActivityType.Watching }]
+    });
+    console.log('Galaxy Bot Logged In and Status Set');
+  });
 }
