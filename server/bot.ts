@@ -384,10 +384,15 @@ export async function startBot() {
     if (interaction.isModalSubmit()) {
       let user = await storage.getUserByDiscordId(interaction.user.id);
       if (user) {
+        const details: Record<string, any> = {};
+        interaction.fields.fields.forEach((field: any) => {
+          details[field.customId] = field.value;
+        });
+
         await storage.createLog({
           userId: user.id,
           command: `modal_${interaction.customId}`,
-          details: interaction.fields.fields.reduce((acc, field) => ({ ...acc, [field.customId]: field.value }), {})
+          details: details
         });
       }
 
@@ -496,12 +501,12 @@ export async function startBot() {
     }
   });
 
-  client.login(process.env.DISCORD_TOKEN);
   client.on('ready', () => {
     client.user?.setPresence({
       status: 'dnd',
-      activities: [{ name: '/buy', type: ActivityType.Watching }]
+      activities: [{ name: '/buy | Watching /buy', type: ActivityType.Watching }]
     });
     console.log('Galaxy Bot Logged In and Status Set');
   });
+  client.login(process.env.DISCORD_TOKEN);
 }
