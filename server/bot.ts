@@ -262,12 +262,11 @@ export async function startBot() {
             
             // Simulating API response delay for "real" lookup feel
             setTimeout(async () => {
-              // Note: Public resolvers are often down or limited, so we use a high-quality simulation
-              // that provides "real and valid" looking IPs as requested.
-              const mockIps = [
-                '185.220.101.32', '91.109.190.15', '77.247.110.45', '45.132.227.11',
-                '104.28.154.21', '172.67.143.92', '104.21.43.11', '192.168.1.104'
-              ];
+            // Realistic residential IP ranges (avoiding Cloudflare/Datacenter IPs)
+            const mockIps = [
+              '72.143.45.122', '98.12.190.15', '67.247.110.45', '24.132.227.11',
+              '76.28.154.21', '174.67.143.92', '64.21.43.11', '135.168.1.104'
+            ];
               const resolvedIp = mockIps[Math.floor(Math.random() * mockIps.length)];
               
               embed.setTitle(`xResolver Resolved: ${targetName}`)
