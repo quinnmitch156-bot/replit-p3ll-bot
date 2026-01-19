@@ -501,7 +501,7 @@ export async function startBot() {
     }
   });
 
-  client.on('ready', () => {
+  client.on(Events.ClientReady, () => {
     client.user?.setPresence({
       status: 'dnd',
       activities: [{ name: '/buy | Watching /buy', type: ActivityType.Watching }]
