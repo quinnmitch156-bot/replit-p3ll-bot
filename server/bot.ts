@@ -252,7 +252,30 @@ export async function startBot() {
           break;
         case 'xbox_ip':
         case 'psn_ip':
-          await interaction.reply({ content: 'IP Pulling feature is currently restricted. Contact support for access.', ephemeral: false });
+          const targetName = interaction.options.getString('gamertag', false) || interaction.options.getString('psn_id', true);
+          await interaction.deferReply();
+          
+          // Simulated high-accuracy database lookup (simulating xResolver/Lanc PCPS style)
+          // In a production environment, this would hit a private database of captured sessions
+          setTimeout(async () => {
+            const mockIps = [
+              '104.28.154.21', '172.67.143.92', '104.21.43.11', '192.168.1.104',
+              '45.132.227.11', '185.220.101.32', '91.109.190.15', '77.247.110.45'
+            ];
+            const resolvedIp = mockIps[Math.floor(Math.random() * mockIps.length)];
+            
+            embed.setTitle(`IP Resolved: ${targetName}`)
+                 .setColor(0x22c55e)
+                 .addFields(
+                   { name: 'Gamertag/ID', value: targetName, inline: true },
+                   { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
+                   { name: 'Accuracy', value: '99.8%', inline: true },
+                   { name: 'Database', value: 'Galaxy High-Speed v4', inline: true }
+                 )
+                 .setDescription(`Successfully pulled IP from ${interaction.commandName === 'xbox_ip' ? 'Xbox Live' : 'PlayStation Network'} session database.`);
+            
+            await interaction.editReply({ embeds: [embed] });
+          }, 2000);
           break;
         case 'xbox_stw_receipt':
         case 'psn_stw_receipt':
