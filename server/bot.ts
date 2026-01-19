@@ -20,7 +20,7 @@ async function generateAndGrantKey(userId: number, discordUser: any, type: strin
     .setColor(0x22c55e)
     .setTitle('Payment Received!')
     .setDescription(`Thank you for your purchase! Here is your access key:\n\n\`${newKey.key}\`\n\nUse \`/redeem key:${newKey.key}\` in the server to activate your access.`)
-    .setFooter({ text: 'Enjoy Galaxy Bot!' });
+    .setFooter({ text: 'Made by Xyn' });
 
   try {
     await discordUser.send({ embeds: [embed] });
@@ -132,7 +132,8 @@ export async function startBot() {
             .setColor(0x22c55e)
             .setTitle('Galaxy Bot Key')
             .setDescription('**"What is Galaxy?"**\nGalaxy bot is a discord bot used to gather information on Epic Games accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Galaxy makes pulling easy and fast!')
-            .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
+            .setThumbnail(interaction.client.user?.displayAvatarURL() || null)
+            .setFooter({ text: 'Made by Xyn' });
 
           const row1 = new ActionRowBuilder<StringSelectMenuBuilder>()
             .addComponents(
@@ -195,12 +196,13 @@ export async function startBot() {
         const errorEmbed = new EmbedBuilder()
           .setColor(0xff0000)
           .setTitle('Invalid Access')
-          .setDescription('No Key Found\nPurchase a key using `/buy` (Available on dashboard)\nMade by Galaxy Team');
+          .setDescription('No Key Found\nPurchase a key using `/buy` (Available on dashboard)\nMade by Galaxy Team')
+          .setFooter({ text: 'Made by Xyn' });
         await interaction.reply({ embeds: [errorEmbed], ephemeral: false });
         return;
       }
 
-      const embed = new EmbedBuilder().setColor(0x22c55e);
+      const embed = new EmbedBuilder().setColor(0x22c55e).setFooter({ text: 'Made by Xyn' });
       switch (interaction.commandName) {
         case 'lookup':
           const username = interaction.options.getString('username', true);
@@ -253,16 +255,14 @@ export async function startBot() {
           const emailReceipt = interaction.options.getString('email', false) || interaction.options.getString('email_address', true);
           const amountReceipt = interaction.options.getString('amount', true);
           embed.setTitle('Receipt Generated Successfully')
-               .setDescription(`Your requested receipt for **${amountReceipt}** on **${date}** has been generated and sent to **${emailReceipt}**.`)
-               .setFooter({ text: 'Galaxy Bot Services' });
+               .setDescription(`Your requested receipt for **${amountReceipt}** on **${date}** has been generated and sent to **${emailReceipt}**.`);
           await interaction.reply({ embeds: [embed] });
           break;
         case 'xbox_aov':
         case 'psn_aov':
           const aovEmail = interaction.options.getString('email', true);
           embed.setTitle('AOV Created')
-               .setDescription(`Account Ownership Verification (AOV) has been initiated for **${aovEmail}**. Results will be sent shortly.`)
-               .setFooter({ text: 'Galaxy Bot Security' });
+               .setDescription(`Account Ownership Verification (AOV) has been initiated for **${aovEmail}**. Results will be sent shortly.`);
           await interaction.reply({ embeds: [embed] });
           break;
         case 'iplookup':
@@ -330,7 +330,8 @@ export async function startBot() {
         const embed = new EmbedBuilder()
           .setColor(0x0099ff)
           .setTitle(`${paymentMethod.toUpperCase()} Payment Instructions`)
-          .setDescription(`To complete your purchase:\n\n1. ${instructions}\n2. Enter the amount for your chosen license.\n3. Fill out the form below to verify.\n\n**Note: Access is only granted AFTER payment is verified.**`);
+          .setDescription(`To complete your purchase:\n\n1. ${instructions}\n2. Enter the amount for your chosen license.\n3. Fill out the form below to verify.\n\n**Note: Access is only granted AFTER payment is verified.**`)
+          .setFooter({ text: 'Made by Xyn' });
 
         await interaction.reply({ embeds: [embed], ephemeral: false });
         await interaction.followUp({ content: 'Click below to open the verification form if the modal did not appear.', components: [
