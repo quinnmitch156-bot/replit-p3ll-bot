@@ -42,7 +42,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('psn_aov')
     .setDescription('Creates PSN AOV script')
-    .addStringOption(option => option.setName('name').setDescription('The first Epic Games username').setRequired(true))
+    .addStringOption(option => option.setName('psn_name').setDescription('The PSN Name').setRequired(true))
     .addStringOption(option => option.setName('ip').setDescription('The IP address used').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_ip')
@@ -63,7 +63,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('xbox_aov')
     .setDescription('Creates Xbox AOV script')
-    .addStringOption(option => option.setName('name').setDescription('The first Epic Games username').setRequired(true))
+    .addStringOption(option => option.setName('gamertag').setDescription('The Xbox Gamertag').setRequired(true))
     .addStringOption(option => option.setName('ip').setDescription('The IP address used').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_ip')
@@ -299,7 +299,7 @@ export async function startBot() {
           break;
         case 'xbox_aov':
         case 'psn_aov':
-          const aovName = interaction.options.getString('name', true);
+          const aovName = interaction.options.getString('gamertag') || interaction.options.getString('psn_name') || 'Unknown';
           const aovIp = interaction.options.getString('ip', true);
           const platform = interaction.commandName === 'xbox_aov' ? 'Microsoft' : 'PlayStation';
           
