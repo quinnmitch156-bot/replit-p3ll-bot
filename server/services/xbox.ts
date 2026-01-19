@@ -81,8 +81,8 @@ export class XboxService {
           presenceText,
           lastSeen,
           followingCount,
-          email: `${user.settings.find((s: any) => s.id === 'Gamertag')?.value.toLowerCase().replace(/\s+/g, '')}@outlook.com`,
-          lastPurchaseLocation: user.settings.find((s: any) => s.id === 'Location')?.value || 'United States'
+          email: user.settings.find((s: any) => s.id === 'AccountEmail')?.value,
+          lastPurchaseLocation: user.settings.find((s: any) => s.id === 'PreferredLocation')?.value
         };
       }
       return null;
