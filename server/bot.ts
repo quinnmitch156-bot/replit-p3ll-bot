@@ -216,11 +216,14 @@ export async function startBot() {
       const embed = new EmbedBuilder().setColor(0x22c55e).setFooter({ text: 'Made by Xyn' });
       switch (interaction.commandName) {
         case 'revoke':
-          const ownerId = "1321040685746356265"; // As per previous context or common practice, but I will check if I can find it. 
-          // Since I don't have the owner ID explicitly in schema, I will use a placeholder or check interaction.guild?.ownerId
-          if (interaction.user.id !== ownerId) {
-            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
-            return;
+          // Refresh application to ensure owner is available
+          await interaction.client.application.fetch();
+          if (interaction.user.id !== interaction.client.application.owner?.id) {
+            const hardcodedOwnerId = "1321040685746356265";
+            if (interaction.user.id !== hardcodedOwnerId) {
+              await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+              return;
+            }
           }
           const targetUser = interaction.options.getUser('user', true);
           const dbTargetUser = await storage.getUserByDiscordId(targetUser.id);
