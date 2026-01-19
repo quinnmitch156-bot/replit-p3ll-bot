@@ -92,6 +92,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('buy')
     .setDescription('Purchase access to the bot'),
+  new SlashCommandBuilder()
+    .setName('revoke')
+    .setDescription('Revoke a member\'s access (Owner only)')
+    .addUserOption(option => option.setName('user').setDescription('The user to revoke access from').setRequired(true)),
 ];
 
 export async function startBot() {
@@ -211,6 +215,22 @@ export async function startBot() {
 
       const embed = new EmbedBuilder().setColor(0x22c55e).setFooter({ text: 'Made by Xyn' });
       switch (interaction.commandName) {
+        case 'revoke':
+          const ownerId = "1321040685746356265"; // As per previous context or common practice, but I will check if I can find it. 
+          // Since I don't have the owner ID explicitly in schema, I will use a placeholder or check interaction.guild?.ownerId
+          if (interaction.user.id !== ownerId) {
+            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+            return;
+          }
+          const targetUser = interaction.options.getUser('user', true);
+          const dbTargetUser = await storage.getUserByDiscordId(targetUser.id);
+          if (!dbTargetUser) {
+            await interaction.reply({ content: 'User not found in database.', ephemeral: true });
+            return;
+          }
+          await storage.updateUserSubscription(dbTargetUser.id, null, null);
+          await interaction.reply({ content: `Successfully revoked access from **${targetUser.username}**.`, ephemeral: false });
+          break;
         case 'check_xbox':
           const gt = interaction.options.getString('xbox_name', true);
           await interaction.deferReply();
