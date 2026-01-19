@@ -294,8 +294,16 @@ export async function startBot() {
           const date = interaction.options.getString('date', true);
           const emailReceipt = interaction.options.getString('email') || interaction.options.getString('email_address') || 'Unknown';
           const amountReceipt = interaction.options.getString('amount', true);
+          
+          const isXbox = interaction.commandName.startsWith('xbox');
+          const isSTW = interaction.commandName.includes('stw');
+          const product = isSTW ? 'Fortnite: Save The World' : `Fortnite - ${amountReceipt} V-Bucks`;
+          const platformName = isXbox ? 'Microsoft account balance' : 'PlayStation Network card';
+          
           embed.setTitle('Receipt Generated Successfully')
-               .setDescription(`Your requested receipt for **${amountReceipt}** on **${date}** has been generated and sent to **${emailReceipt}**.`);
+               .setDescription(`**Hello,**\n\nThank you for shopping with us on ${date}.\n\nAny downloads you bought, except preorders, are available now.\n\n**Order 2631343608**\n\n**Product:** ${product}\n**Quantity:** 1\n**Amount:** $4.99\n\n**Total:** **$4.99**\n\n**Payment method:** ${platformName}\n\n**Sent to:** ${emailReceipt}`)
+               .setImage('https://' + process.env.REPL_SLUG + '.' + process.env.REPL_OWNER + '.repl.co/assets/receipt_template.jpeg');
+          
           await interaction.reply({ embeds: [embed] });
           break;
         case 'psn_aov':
