@@ -207,7 +207,7 @@ export async function startBot() {
         const errorEmbed = new EmbedBuilder()
           .setColor(0xff0000)
           .setTitle('Invalid Access')
-          .setDescription('**No Key Found**\nPurchase a key using\n\n`/buy`\n\nMade by Simba')
+          .setDescription('**No Key Found**\nPurchase a key using\n\n```/buy```)
           .setFooter({ text: 'Made by Xyn' });
         await interaction.reply({ embeds: [errorEmbed], ephemeral: false });
         return;
@@ -221,7 +221,7 @@ export async function startBot() {
           if (interaction.user.id !== interaction.client.application.owner?.id) {
             const hardcodedOwnerId = "1321040685746356265";
             if (interaction.user.id !== hardcodedOwnerId) {
-              await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+              await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: false });
               return;
             }
           }
@@ -299,7 +299,7 @@ export async function startBot() {
                      { name: 'Gamertag/ID', value: targetName, inline: true },
                      { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
                      { name: 'Status', value: 'Decrypted', inline: true },
-                     { name: 'Database', value: 'xResolver Premium v2', inline: true }
+                     { name: 'Database', value: 'xResolver', inline: true }
                    )
                    .setDescription(`Successfully resolved IP for **${targetName}** using xResolver database.`);
               
