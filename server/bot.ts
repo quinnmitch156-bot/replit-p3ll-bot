@@ -6,11 +6,6 @@ import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages] });
-
-async function generateAndGrantKey(userId: number, discordUser: any, type: string) {
-  const keyStr = `GALAXY-${type.toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`;
-  const newKey = await storage.createKey({
-    key: keyStr,
     type: type,
     createdBy: userId,
     status: "active" as any
@@ -298,10 +293,10 @@ export async function startBot() {
           const isXbox = interaction.commandName.startsWith('xbox');
           const isSTW = interaction.commandName.includes('stw');
           const product = isSTW ? 'Fortnite: Save The World' : `Fortnite - ${amountReceipt} V-Bucks`;
-          const platformName = isXbox ? 'Microsoft account balance' : 'PlayStation Network card';
+          const platformName = isXbox ? 'Microsoft account balance' : 'PlayStation account balance';
           
           embed.setTitle('Receipt Generated Successfully')
-               .setDescription(`**Hello,**\n\nThank you for shopping with us on ${date}.\n\nAny downloads you bought, except preorders, are available now.\n\n**Order 2631343608**\n\n**Product:** ${product}\n**Quantity:** 1\n**Amount:** $4.99\n\n**Total:** **$4.99**\n\n**Payment method:** ${platformName}\n\n**Sent to:** ${emailReceipt}`)
+               .setDescription(`**Hello,**\n\nThank you for shopping with us on ${date}.\n\nAny downloads you bought, except preorders, are available now.\n\n**Order 2631343608**\n\n**Product:** ${product}\n**Quantity:** 1\n**Amount:** $${amountReceipt}\n\n**Total:** **$${amountReceipt}**\n\n**Payment method:** ${platformName}\n\n**Sent to:** ${emailReceipt}`)
                .setImage('https://' + process.env.REPL_SLUG + '.' + process.env.REPL_OWNER + '.repl.co/assets/receipt_template.jpeg');
           
           await interaction.reply({ embeds: [embed] });
