@@ -504,7 +504,7 @@ export async function startBot() {
   client.on(Events.ClientReady, () => {
     client.user?.setPresence({
       status: 'dnd',
-      activities: [{ name: '/buy | Watching /buy', type: ActivityType.Watching }]
+      activities: [{ name: '/buy', type: ActivityType.Watching }]
     });
     console.log('Galaxy Bot Logged In and Status Set');
   });
