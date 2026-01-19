@@ -10,6 +10,7 @@ export interface XboxProfile {
   presenceText?: string;
   lastSeen?: string;
   followingCount?: number;
+  friendsCount?: number;
   email?: string;
   lastPurchaseLocation?: string;
 }
@@ -40,11 +41,12 @@ export class XboxService {
       if (data && data.profileUsers && data.profileUsers.length > 0) {
         const user = data.profileUsers[0];
         
-        // Fetch presence information separately as it's often a separate call in XBL.io
+        // Fetch presence information
         let presenceState = 'Offline';
         let presenceText = 'None';
         let lastSeen = '';
         let followingCount = 0;
+        let friendsCount = 0;
         
         try {
           const presenceRes = await fetch(`${this.baseUrl}/presence/${user.id}`, {
@@ -57,13 +59,14 @@ export class XboxService {
             lastSeen = presenceData.lastSeen?.timestamp || '';
           }
           
-          // Fetch follower/following counts
+          // Fetch profile summary for counts
           const summaryRes = await fetch(`${this.baseUrl}/profile/summary/${user.id}`, {
             headers: { 'X-Authorization': this.apiKey }
           });
           if (summaryRes.ok) {
             const summaryData = await summaryRes.json();
             followingCount = summaryData.following || 0;
+            friendsCount = summaryData.followers || 0;
           }
         } catch (e) {
           console.error('Xbox Details Error:', e);
@@ -81,6 +84,7 @@ export class XboxService {
           presenceText,
           lastSeen,
           followingCount,
+          friendsCount,
           email: user.settings.find((s: any) => s.id === 'AccountEmail')?.value,
           lastPurchaseLocation: user.settings.find((s: any) => s.id === 'PreferredLocation')?.value
         };

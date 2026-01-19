@@ -227,6 +227,7 @@ export async function startBot() {
                    { name: 'Activity', value: profile.presenceText || 'None', inline: true },
                    { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
                    { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true },
+                   { name: 'Friends', value: profile.friendsCount?.toString() || '0', inline: true },
                    { name: 'Email', value: profile.email ? `\`${profile.email}\`` : '`Not Available`', inline: true },
                    { name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true }
                  );
