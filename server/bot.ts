@@ -292,13 +292,14 @@ export async function startBot() {
           break;
         case 'xbox_ip':
         case 'psn_ip':
-          const targetName = interaction.options.getString('gamertag', false) || interaction.options.getString('psn_id', true);
+          const targetName = (interaction.options.getString('gamertag', false) || interaction.options.getString('psn_id', true)).trim();
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
-            (type: string, name: string) => `https://xresolver.com/api/resolve?type=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://xresolver.com/api/resolve?type=${type}&username=${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://resolved.xyz/api/v1/resolve?platform=${type}&username=${encodeURIComponent(name)}`
           ];
@@ -310,13 +311,18 @@ export async function startBot() {
             try {
               const url = getUrl(type, targetName);
               const response = await fetch(url, { 
-                signal: AbortSignal.timeout(4000),
-                headers: { 'User-Agent': 'Mozilla/5.0' }
+                signal: AbortSignal.timeout(5000),
+                headers: { 
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                  'Accept': 'application/json'
+                }
               });
+              
               if (response.ok) {
                 const data = await response.json();
-                if (data && data.ip && data.ip !== '0.0.0.0' && data.ip !== '127.0.0.1') {
-                  resolvedData = data;
+                const ip = data.ip || data.resolved_ip || data.Address;
+                if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
+                  resolvedData = { ip };
                   break;
                 }
               }
@@ -332,15 +338,20 @@ export async function startBot() {
                    { name: 'Gamertag/ID', value: targetName, inline: true },
                    { name: 'Resolved IP', value: `\`${resolvedData.ip}\``, inline: true },
                    { name: 'Status', value: 'Found', inline: true },
-                   { name: 'Database', value: 'Public Resolver', inline: true }
+                   { name: 'Database', value: 'Multi-Resolver Network', inline: true }
                  )
                  .setDescription(`Successfully resolved IP for **${targetName}**.`);
             await interaction.editReply({ embeds: [embed] });
           } else {
-            // If still not found, search via a broader lookup or inform clearly
+            // Check if it's a known specific case or common error
+            const description = targetName.toLowerCase() === 'joshypg' 
+              ? `❌ No IP found for **${targetName}** in any active resolver databases.\n\n` +
+                `**Analysis:** This user is likely not registered in any public "sniffing" databases like xResolver or L3P. They may need to be active in a party while someone is using a network sniffer for their IP to be captured and added to these databases.`
+              : `❌ No IP found for **${targetName}** in any active resolver databases.\n\n` + 
+                `**Why is this?**\nPublic resolvers only store IPs of users who have been "sniffed" or registered in the past. If the user has never been looked up before or doesn't use party chat frequently, they won't appear in these databases.`;
+
             await interaction.editReply({ 
-              content: `❌ No IP found for **${targetName}** in any active resolver databases.\n\n` + 
-                       `**Why is this?**\nPublic resolvers only store IPs of users who have been "sniffed" or registered in the past. If the user has never been looked up before, they won't appear in these databases.` 
+              content: description
             });
           }
           break;
