@@ -266,16 +266,31 @@ export async function startBot() {
           break;
         case 'xbox_friends':
           const friendsGt = interaction.options.getString('xbox_name', true);
-          await interaction.deferReply();
+          await interaction.deferReply({ flags: [] });
           const friends = await xboxService.getFriends(friendsGt);
           if (friends && friends.length > 0) {
-            const friendsList = friends.slice(0, 15).map(f => `• **${f.gamertag}** (${f.presenceState})`).join('\n');
-            embed.setTitle(`Friends List for: ${friendsGt}`)
-                 .setDescription(friendsList + (friends.length > 15 ? `\n*...and ${friends.length - 15} more*` : ''))
-                 .setFooter({ text: `Total Friends: ${friends.length} | Made by Xyn` });
+            // Sort by presence state to show online friends first
+            const sortedFriends = friends.sort((a, b) => {
+              if (a.presenceState === 'Online' && b.presenceState !== 'Online') return -1;
+              if (a.presenceState !== 'Online' && b.presenceState === 'Online') return 1;
+              return 0;
+            });
+
+            const friendsList = sortedFriends.slice(0, 15).map(f => {
+              const status = f.presenceState === 'Online' ? '🟢' : '⚫';
+              return `${status} **${f.gamertag}** (${f.presenceState})`;
+            }).join('\n');
+            
+            embed.setTitle(`Xbox Friends List: ${friendsGt}`)
+                 .setDescription(`### Recently Active Friends\n${friendsList}${friends.length > 15 ? `\n\n*...and ${friends.length - 15} more*` : ''}`)
+                 .addFields(
+                   { name: 'Total Friends', value: friends.length.toString(), inline: true },
+                   { name: 'Platform', value: 'Xbox Network', inline: true }
+                 )
+                 .setFooter({ text: `XBL.io API | Made by Xyn` });
             await interaction.editReply({ embeds: [embed] });
           } else {
-            await interaction.editReply({ content: 'Could not fetch friends list or player has no friends.' });
+            await interaction.editReply({ content: `❌ Could not fetch friends list for **${friendsGt}**. The profile might be private or the gamertag is incorrect.` });
           }
           break;
         case 'xbox_ip':
@@ -283,53 +298,43 @@ export async function startBot() {
           const targetName = interaction.options.getString('gamertag', false) || interaction.options.getString('psn_id', true);
           await interaction.deferReply({ flags: [] });
           
-          try {
-            const resolverType = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
-            // Trying xresolver.com public API
-            const response = await fetch(`https://xresolver.com/api/resolve?type=${resolverType}&username=${encodeURIComponent(targetName)}`);
-            const data = await response.json();
-            
-            if (data && data.ip) {
-              embed.setTitle(`Resolver Result: ${targetName}`)
-                   .setColor(0x22c55e)
-                   .addFields(
-                     { name: 'Gamertag/ID', value: targetName, inline: true },
-                     { name: 'Resolved IP', value: `\`${data.ip}\``, inline: true },
-                     { name: 'Status', value: 'Found', inline: true },
-                     { name: 'Database', value: 'xResolver', inline: true }
-                   )
-                   .setDescription(`Successfully resolved IP for **${targetName}**.`);
-              
-              await interaction.editReply({ embeds: [embed] });
-            } else {
-              // Fallback to secondary if username not found
-              throw new Error("Not found in primary");
-            }
-          } catch (error) {
+          const resolverEndpoints = [
+            (type: string, name: string) => `https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://xresolver.com/api/resolve?type=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`
+          ];
+
+          let resolvedData = null;
+          const type = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
+
+          for (const getUrl of resolverEndpoints) {
             try {
-              const resolverType = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
-              const response = await fetch(`https://api.l3p.xyz/resolver?type=${resolverType}&username=${encodeURIComponent(targetName)}`);
-              const data = await response.json();
-              
-              if (data && data.ip) {
-                embed.setTitle(`Resolver Result: ${targetName}`)
-                     .setColor(0x22c55e)
-                     .addFields(
-                       { name: 'Gamertag/ID', value: targetName, inline: true },
-                       { name: 'Resolved IP', value: `\`${data.ip}\``, inline: true },
-                       { name: 'Status', value: 'Found', inline: true },
-                       { name: 'Database', value: 'Backup Resolver', inline: true }
-                     )
-                     .setDescription(`Successfully resolved IP for **${targetName}**.`);
-                
-                await interaction.editReply({ embeds: [embed] });
-              } else {
-                await interaction.editReply({ content: `❌ No IP found for **${targetName}** in the resolver database.` });
+              const url = getUrl(type, targetName);
+              const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+              if (response.ok) {
+                const data = await response.json();
+                if (data && data.ip && data.ip !== '0.0.0.0') {
+                  resolvedData = data;
+                  break;
+                }
               }
-            } catch (fallbackError) {
-              // Final fallback to a third service if available or informative message
-              await interaction.editReply({ content: '❌ Failed to connect to any resolver service. Please try again in a few minutes as these public APIs can be unstable.' });
+            } catch (e) {
+              continue;
             }
+          }
+
+          if (resolvedData) {
+            embed.setTitle(`Resolver Result: ${targetName}`)
+                 .setColor(0x22c55e)
+                 .addFields(
+                   { name: 'Gamertag/ID', value: targetName, inline: true },
+                   { name: 'Resolved IP', value: `\`${resolvedData.ip}\``, inline: true },
+                   { name: 'Status', value: 'Found', inline: true }
+                 )
+                 .setDescription(`Successfully resolved IP for **${targetName}**.`);
+            await interaction.editReply({ embeds: [embed] });
+          } else {
+            await interaction.editReply({ content: `❌ No IP found for **${targetName}** in any resolver database. The user may not be registered.` });
           }
           break;
         case 'psn_stw_receipt':
