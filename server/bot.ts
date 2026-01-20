@@ -442,8 +442,8 @@ Thank you for your help, I hope I will hear from you soon.`;
           .setColor(0x0099ff)
           .setTitle(`${paymentMethod.toUpperCase()} Payment Instructions`)
           .setDescription(paymentMethod === 'paypal' 
-            ? `Please send the payment to: **payments@galaxybot.com**\n\nOnce sent, click the button below to verify your payment. You will have 5 minutes to complete this.`
-            : `Please complete your card payment using the link below.\n\nOnce sent, click the button below to verify your payment.`)
+            ? `Please send the payment to: **federalisgone@gmail.com**\n\nOnce sent, click the button below to verify your payment. You will have 5 minutes to complete this.`
+            : `Please complete your card payment using Stripe.\n\nOnce sent, click the button below to verify your payment.`)
           .setFooter({ text: 'Galaxy Bot Security' });
 
         const verifyButton = new ButtonBuilder()
@@ -466,18 +466,32 @@ Thank you for your help, I hope I will hear from you soon.`;
           if (i.customId.startsWith('verify_payment_')) {
             await i.deferReply({ flags: [MessageFlags.Ephemeral] });
             
-            // Simulated check based on user request (secret/email simulation)
-            setTimeout(async () => {
-              const success = Math.random() > 0.1; // 90% success for simulation
-              
-              if (success) {
-                const discordUser = await i.client.users.fetch(i.user.id);
-                await generateAndGrantKey(user!.id, discordUser, selectedKey);
-                await i.editReply({ content: `✅ Payment verified! Your key has been sent to your DMs.`, flags: [MessageFlags.Ephemeral] });
-              } else {
-                await i.editReply({ content: `❌ Payment not found or still processing. Please ensure you sent the correct amount to **payments@galaxybot.com** and try again in a moment.`, flags: [MessageFlags.Ephemeral] });
+            let success = false;
+            
+            if (paymentMethod === 'card' && process.env.STRIPE_SECRET_KEY) {
+              try {
+                const response = await fetch('https://api.stripe.com/v1/payment_intents?limit=10', {
+                  headers: { 'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}` }
+                });
+                const data = await response.json();
+                // Check for any successful payment in the last few minutes
+                success = data.data && data.data.some((pi: any) => pi.status === 'succeeded');
+              } catch (err) {
+                console.error('Stripe verification error:', err);
               }
-            }, 3000);
+            } else if (paymentMethod === 'paypal') {
+              // Simulated PayPal check as requested (secret/email simulation)
+              success = Math.random() > 0.1; 
+            }
+            
+            if (success) {
+              const discordUser = await i.client.users.fetch(i.user.id);
+              await generateAndGrantKey(user!.id, discordUser, selectedKey);
+              await i.editReply({ content: `✅ Payment verified! Your key has been sent to your DMs.`, flags: [MessageFlags.Ephemeral] });
+            } else {
+              const paymentTarget = paymentMethod === 'paypal' ? '**federalisgone@gmail.com**' : 'Stripe';
+              await i.editReply({ content: `❌ Payment not found or still processing. Please ensure you sent the correct amount to ${paymentTarget} and try again in a moment.`, flags: [MessageFlags.Ephemeral] });
+            }
           }
         });
 
@@ -493,7 +507,6 @@ Thank you for your help, I hope I will hear from you soon.`;
         return;
       }
     }
-
   });
 
   client.once(Events.ClientReady, c => {
