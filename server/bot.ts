@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType, MessageFlags } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
@@ -456,7 +456,7 @@ Thank you for your help, I hope I will hear from you soon.`;
         const response = await interaction.reply({ 
           embeds: [paymentInstructionsEmbed], 
           components: [row], 
-          ephemeral: true 
+          flags: [MessageFlags.Ephemeral]
         });
 
         // Verification Collector
@@ -464,7 +464,7 @@ Thank you for your help, I hope I will hear from you soon.`;
 
         collector.on('collect', async i => {
           if (i.customId.startsWith('verify_payment_')) {
-            await i.deferReply({ ephemeral: true });
+            await i.deferReply({ flags: [MessageFlags.Ephemeral] });
             
             // Simulated check based on user request (secret/email simulation)
             setTimeout(async () => {
@@ -473,9 +473,9 @@ Thank you for your help, I hope I will hear from you soon.`;
               if (success) {
                 const discordUser = await i.client.users.fetch(i.user.id);
                 await generateAndGrantKey(user!.id, discordUser, selectedKey);
-                await i.editReply({ content: `✅ Payment verified! Your key has been sent to your DMs.` });
+                await i.editReply({ content: `✅ Payment verified! Your key has been sent to your DMs.`, flags: [MessageFlags.Ephemeral] });
               } else {
-                await i.editReply({ content: `❌ Payment not found or still processing. Please ensure you sent the correct amount to **payments@galaxybot.com** and try again in a moment.` });
+                await i.editReply({ content: `❌ Payment not found or still processing. Please ensure you sent the correct amount to **payments@galaxybot.com** and try again in a moment.`, flags: [MessageFlags.Ephemeral] });
               }
             }, 3000);
           }
