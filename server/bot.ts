@@ -276,19 +276,15 @@ export async function startBot() {
               return 0;
             });
 
-            const friendsList = sortedFriends.slice(0, 15).map(f => {
+            const friendsList = sortedFriends.map(f => {
               const status = f.presenceState === 'Online' ? '🟢' : '⚫';
               const name = f.realName ? ` (${f.realName})` : '';
               return `${status} **${f.gamertag}**${name} - ${f.presenceState}`;
             }).join('\n');
             
             embed.setTitle(`Xbox Friends List: ${friendsGt}`)
-                 .setDescription(`### Recently Active Friends\n${friendsList}${friends.length > 15 ? `\n\n*...and ${friends.length - 15} more*` : ''}`)
-                 .addFields(
-                   { name: 'Total Friends', value: friends.length.toString(), inline: true },
-                   { name: 'Platform', value: 'Xbox Network', inline: true }
-                 )
-                 .setFooter({ text: `XBL.io API | Made by Xyn` });
+                 .setDescription(`### Active Friends\n${friendsList}`)
+                 .setFooter({ text: `Made by Xyn` });
             await interaction.editReply({ embeds: [embed] });
           } else {
             await interaction.editReply({ content: `❌ Could not fetch friends list for **${friendsGt}**. The profile might be private or the gamertag is incorrect.` });
