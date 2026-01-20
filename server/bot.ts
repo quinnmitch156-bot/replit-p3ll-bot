@@ -173,7 +173,11 @@ export async function startBot() {
                 ])
             );
 
-          await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: false });
+          await interaction.reply({ 
+            embeds: [embed], 
+            components: [row1, row2], 
+            flags: [] 
+          });
         } catch (error) {
           console.error('Error in /buy command:', error);
           await interaction.reply({ content: 'An error occurred while processing the buy command.', ephemeral: false });
@@ -456,7 +460,7 @@ Thank you for your help, I hope I will hear from you soon.`;
         await interaction.reply({ 
           embeds: [paymentInstructionsEmbed], 
           components: [row], 
-          flags: [MessageFlags.Ephemeral]
+          flags: []
         });
         return;
       }
@@ -499,7 +503,7 @@ Thank you for your help, I hope I will hear from you soon.`;
         const email = interaction.fields.getTextInputValue('email');
         const amount = interaction.fields.getTextInputValue('amount');
 
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        await interaction.deferReply({ flags: [] });
 
         let success = false;
         if (method === 'card' && process.env.STRIPE_SECRET_KEY) {
@@ -524,11 +528,11 @@ Thank you for your help, I hope I will hear from you soon.`;
           let user = await storage.getUserByDiscordId(interaction.user.id);
           if (user) {
             await generateAndGrantKey(user.id, discordUser, type);
-            await interaction.editReply({ content: `✅ Payment verified! Your key has been sent to your DMs.`, flags: [MessageFlags.Ephemeral] });
+            await interaction.editReply({ content: `✅ Payment verified! Your key has been sent to your DMs.`, flags: [] });
           }
         } else {
           const paymentTarget = method === 'paypal' ? '**federalisgone@gmail.com**' : 'Stripe';
-          await interaction.editReply({ content: `❌ Payment not found or still processing for ${email}. Please ensure you sent the correct amount to ${paymentTarget} and try again.`, flags: [MessageFlags.Ephemeral] });
+          await interaction.editReply({ content: `❌ Payment not found or still processing for ${email}. Please ensure you sent the correct amount to ${paymentTarget} and try again.`, flags: [] });
         }
       }
     }
