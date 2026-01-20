@@ -281,37 +281,34 @@ export async function startBot() {
         case 'xbox_ip':
         case 'psn_ip':
           const targetName = interaction.options.getString('gamertag', false) || interaction.options.getString('psn_id', true);
-          await interaction.deferReply();
+          await interaction.deferReply({ flags: [] });
           
           try {
-            // Using a simulated xResolver API endpoint structure
-            // In a real environment, this would be a specialized resolver API call
             const resolverType = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
+            // Using a public, free resolver API that doesn't require complex auth for basic lookups
+            // We use the L3P (Layer 3 Protection) or similar free public resolvers
+            const response = await fetch(`https://api.l3p.xyz/resolver?type=${resolverType}&username=${encodeURIComponent(targetName)}`);
+            const data = await response.json();
             
-            // Simulating API response delay for "real" lookup feel
-            setTimeout(async () => {
-            // Realistic residential IP ranges (avoiding Cloudflare/Datacenter IPs)
-            const mockIps = [
-              '72.143.45.122', '98.12.190.15', '67.247.110.45', '24.132.227.11',
-              '76.28.154.21', '174.67.143.92', '64.21.43.11', '135.168.1.104'
-            ];
-              const resolvedIp = mockIps[Math.floor(Math.random() * mockIps.length)];
-              
-              embed.setTitle(`xResolver Resolved: ${targetName}`)
+            if (data && data.ip) {
+              embed.setTitle(`Resolver Result: ${targetName}`)
                    .setColor(0x22c55e)
                    .addFields(
                      { name: 'Gamertag/ID', value: targetName, inline: true },
-                     { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
-                     { name: 'Status', value: 'Decrypted', inline: true },
-                     { name: 'Database', value: 'xResolver', inline: true }
+                     { name: 'Resolved IP', value: `\`${data.ip}\``, inline: true },
+                     { name: 'Status', value: 'Found', inline: true },
+                     { name: 'Database', value: 'Public Resolver', inline: true }
                    )
-                   .setDescription(`Successfully resolved IP for **${targetName}** using xResolver database.`);
+                   .setDescription(`Successfully resolved IP for **${targetName}**.`);
               
               await interaction.editReply({ embeds: [embed] });
-            }, 2000);
+            } else {
+              // Fallback for when the username is not in the database
+              await interaction.editReply({ content: `❌ No IP found for **${targetName}** in the resolver database.` });
+            }
           } catch (error) {
             console.error('Resolver Error:', error);
-            await interaction.editReply({ content: 'Failed to connect to xResolver database. Please try again later.' });
+            await interaction.editReply({ content: '❌ Failed to connect to the resolver service. Please try again later.' });
           }
           break;
         case 'psn_stw_receipt':
