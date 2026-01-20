@@ -285,16 +285,8 @@ export async function startBot() {
           
           try {
             const resolverType = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
-            // Trying a more stable public resolver endpoint
-            const response = await fetch(`https://resolver.lol/api/resolve?platform=${resolverType}&username=${encodeURIComponent(targetName)}`, {
-              headers: { 'User-Agent': 'Mozilla/5.0' },
-              timeout: 5000
-            } as any);
-            
-            if (!response.ok) {
-              throw new Error(`API responded with status: ${response.status}`);
-            }
-
+            // Trying xresolver.com public API
+            const response = await fetch(`https://xresolver.com/api/resolve?type=${resolverType}&username=${encodeURIComponent(targetName)}`);
             const data = await response.json();
             
             if (data && data.ip) {
@@ -304,28 +296,27 @@ export async function startBot() {
                      { name: 'Gamertag/ID', value: targetName, inline: true },
                      { name: 'Resolved IP', value: `\`${data.ip}\``, inline: true },
                      { name: 'Status', value: 'Found', inline: true },
-                     { name: 'Database', value: 'Public Resolver', inline: true }
+                     { name: 'Database', value: 'xResolver', inline: true }
                    )
                    .setDescription(`Successfully resolved IP for **${targetName}**.`);
               
               await interaction.editReply({ embeds: [embed] });
             } else {
-              await interaction.editReply({ content: `❌ No IP found for **${targetName}** in the database.` });
+              // Fallback to secondary if username not found
+              throw new Error("Not found in primary");
             }
           } catch (error) {
-            console.error('Resolver Error:', error);
-            // Fallback to a secondary resolver if the first one fails
             try {
               const resolverType = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
-              const fallbackResponse = await fetch(`https://api.l3p.xyz/resolver?type=${resolverType}&username=${encodeURIComponent(targetName)}`);
-              const fallbackData = await fallbackResponse.json();
+              const response = await fetch(`https://api.l3p.xyz/resolver?type=${resolverType}&username=${encodeURIComponent(targetName)}`);
+              const data = await response.json();
               
-              if (fallbackData && fallbackData.ip) {
+              if (data && data.ip) {
                 embed.setTitle(`Resolver Result: ${targetName}`)
                      .setColor(0x22c55e)
                      .addFields(
                        { name: 'Gamertag/ID', value: targetName, inline: true },
-                       { name: 'Resolved IP', value: `\`${fallbackData.ip}\``, inline: true },
+                       { name: 'Resolved IP', value: `\`${data.ip}\``, inline: true },
                        { name: 'Status', value: 'Found', inline: true },
                        { name: 'Database', value: 'Backup Resolver', inline: true }
                      )
@@ -336,8 +327,8 @@ export async function startBot() {
                 await interaction.editReply({ content: `❌ No IP found for **${targetName}** in the resolver database.` });
               }
             } catch (fallbackError) {
-              console.error('Fallback Resolver Error:', fallbackError);
-              await interaction.editReply({ content: '❌ Failed to connect to any resolver service. They might be offline or under maintenance.' });
+              // Final fallback to a third service if available or informative message
+              await interaction.editReply({ content: '❌ Failed to connect to any resolver service. Please try again in a few minutes as these public APIs can be unstable.' });
             }
           }
           break;
