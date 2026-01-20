@@ -207,7 +207,7 @@ export async function startBot() {
         const errorEmbed = new EmbedBuilder()
           .setColor(0xff0000)
           .setTitle('Invalid Access')
-          .setDescription('**No Key Found**\nPurchase a key using\n\n```/buy```)
+          .setDescription('**No Key Found**\nPurchase a key using\n\n```/buy```')
           .setFooter({ text: 'Made by Xyn' });
         await interaction.reply({ embeds: [errorEmbed], ephemeral: false });
         return;
