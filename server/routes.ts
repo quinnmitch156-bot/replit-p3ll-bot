@@ -72,11 +72,12 @@ export async function registerRoutes(
   });
 
   app.get(api.users.get.path, async (req, res) => {
-    let user = await storage.getUserByDiscordId(req.params.discordId);
+    const discordId = req.params.discordId as string;
+    let user = await storage.getUserByDiscordId(discordId);
     if (!user) {
       // Create a temporary profile if not found to prevent 404s during sync
       user = await storage.createUser({
-        discordId: req.params.discordId,
+        discordId: discordId,
         username: "New User",
         role: "user"
       });
