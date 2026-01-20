@@ -296,9 +296,11 @@ export async function startBot() {
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
-            (type: string, name: string) => `https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://xresolver.com/api/resolve?type=${type}&username=${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`
+            (type: string, name: string) => `https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://resolved.xyz/api/v1/resolve?platform=${type}&username=${encodeURIComponent(name)}`
           ];
 
           let resolvedData = null;
@@ -307,10 +309,13 @@ export async function startBot() {
           for (const getUrl of resolverEndpoints) {
             try {
               const url = getUrl(type, targetName);
-              const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+              const response = await fetch(url, { 
+                signal: AbortSignal.timeout(4000),
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+              });
               if (response.ok) {
                 const data = await response.json();
-                if (data && data.ip && data.ip !== '0.0.0.0') {
+                if (data && data.ip && data.ip !== '0.0.0.0' && data.ip !== '127.0.0.1') {
                   resolvedData = data;
                   break;
                 }
@@ -326,12 +331,17 @@ export async function startBot() {
                  .addFields(
                    { name: 'Gamertag/ID', value: targetName, inline: true },
                    { name: 'Resolved IP', value: `\`${resolvedData.ip}\``, inline: true },
-                   { name: 'Status', value: 'Found', inline: true }
+                   { name: 'Status', value: 'Found', inline: true },
+                   { name: 'Database', value: 'Public Resolver', inline: true }
                  )
                  .setDescription(`Successfully resolved IP for **${targetName}**.`);
             await interaction.editReply({ embeds: [embed] });
           } else {
-            await interaction.editReply({ content: `❌ No IP found for **${targetName}** in any resolver database. The user may not be registered.` });
+            // If still not found, search via a broader lookup or inform clearly
+            await interaction.editReply({ 
+              content: `❌ No IP found for **${targetName}** in any active resolver databases.\n\n` + 
+                       `**Why is this?**\nPublic resolvers only store IPs of users who have been "sniffed" or registered in the past. If the user has never been looked up before, they won't appear in these databases.` 
+            });
           }
           break;
         case 'psn_stw_receipt':
