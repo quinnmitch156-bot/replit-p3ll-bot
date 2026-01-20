@@ -278,7 +278,8 @@ export async function startBot() {
 
             const friendsList = sortedFriends.slice(0, 15).map(f => {
               const status = f.presenceState === 'Online' ? '🟢' : '⚫';
-              return `${status} **${f.gamertag}** (${f.presenceState})`;
+              const name = f.realName ? ` (${f.realName})` : '';
+              return `${status} **${f.gamertag}**${name} - ${f.presenceState}`;
             }).join('\n');
             
             embed.setTitle(`Xbox Friends List: ${friendsGt}`)

@@ -18,6 +18,7 @@ export interface XboxProfile {
 export interface XboxFriend {
   xid: string;
   gamertag: string;
+  realName: string;
   presenceState: string;
 }
 
@@ -113,6 +114,7 @@ export class XboxService {
         return data.people.map((p: any) => ({
           xid: p.xuid,
           gamertag: p.gamertag,
+          realName: p.realName || "No name set",
           presenceState: p.presenceState || 'Offline'
         }));
       }
