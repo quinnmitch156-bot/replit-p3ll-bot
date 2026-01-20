@@ -41,49 +41,49 @@ const commands = [
     .addStringOption(option => option.setName('ip').setDescription('The IP address').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_aov')
-    .setDescription('Creates PSN AOV script')
+    .setDescription('Creates an PSN AOV from the Right Provided Information')
     .addStringOption(option => option.setName('psn_name').setDescription('The PSN Name').setRequired(true))
     .addStringOption(option => option.setName('ip').setDescription('The IP address used').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_ip')
-    .setDescription('Get The IP Address of a Playstation Player')
+    .setDescription('Get The IP Address from an PSN Gamertag')
     .addStringOption(option => option.setName('psn_id').setDescription('PSN ID').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_stw_receipt')
-    .setDescription('Generate a PlayStation receipt for Save The World')
+    .setDescription('Generates a PlayStation receipt for STW')
     .addStringOption(option => option.setName('date').setDescription('Date').setRequired(true))
     .addStringOption(option => option.setName('email').setDescription('Email').setRequired(true))
     .addStringOption(option => option.setName('amount').setDescription('Amount').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_vbucks_receipt')
-    .setDescription('Generate a Vbucks receipt for Playstation! 2800 or 1000')
+    .setDescription('Generates a Vbucks receipt for Playstation! 2800 or 1000')
     .addStringOption(option => option.setName('date').setDescription('Date').setRequired(true))
     .addStringOption(option => option.setName('email').setDescription('Email').setRequired(true))
     .addStringOption(option => option.setName('amount').setDescription('Amount').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_aov')
-    .setDescription('Creates Xbox AOV script')
+    .setDescription('Creates an Xbox AOV from the Right Provided Information')
     .addStringOption(option => option.setName('gamertag').setDescription('The Xbox Gamertag').setRequired(true))
     .addStringOption(option => option.setName('ip').setDescription('The IP address used').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_ip')
-    .setDescription('Get The IP Address of a Xbox Player')
+    .setDescription('Get The IP Address from an Xbox Gamertag')
     .addStringOption(option => option.setName('gamertag').setDescription('Gamertag').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_stw_receipt')
-    .setDescription('Generate a Xbox receipt for Save The World')
+    .setDescription('Generates a Xbox receipt for STW')
     .addStringOption(option => option.setName('date').setDescription('Date').setRequired(true))
     .addStringOption(option => option.setName('email').setDescription('Email').setRequired(true))
     .addStringOption(option => option.setName('amount').setDescription('Amount').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_vbucks_receipt')
-    .setDescription('Generate a Vbucks Xbox receipt! 2800 or 1000')
+    .setDescription('Generates a Vbucks Xbox receipt! 2800 or 1000')
     .addStringOption(option => option.setName('date').setDescription('Date').setRequired(true))
     .addStringOption(option => option.setName('email_address').setDescription('Email Address').setRequired(true))
     .addStringOption(option => option.setName('amount').setDescription('Amount').setRequired(true)),
   new SlashCommandBuilder()
     .setName('xbox_friends')
-    .setDescription('Get the Xbox friends list of a player')
+    .setDescription('Gets an Xbox friends list')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
   new SlashCommandBuilder()
     .setName('redeem')
@@ -91,7 +91,7 @@ const commands = [
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
   new SlashCommandBuilder()
     .setName('buy')
-    .setDescription('Purchase access to the bot'),
+    .setDescription('Buy a product to get access to galaxy!'),
   new SlashCommandBuilder()
     .setName('revoke')
     .setDescription('Revoke a member\'s access (Owner only)')
@@ -345,10 +345,7 @@ export async function startBot() {
           } else {
             // Check if it's a known specific case or common error
             const description = targetName.toLowerCase() === 'joshypg' 
-              ? `❌ No IP found for **${targetName}** in any active resolver databases.\n\n` +
-                `**Analysis:** This user is likely not registered in any public "sniffing" databases like xResolver or L3P. They may need to be active in a party while someone is using a network sniffer for their IP to be captured and added to these databases.`
-              : `❌ No IP found for **${targetName}** in any active resolver databases.\n\n` + 
-                `**Why is this?**\nPublic resolvers only store IPs of users who have been "sniffed" or registered in the past. If the user has never been looked up before or doesn't use party chat frequently, they won't appear in these databases.`;
+              ? `❌ No IP found for **${targetName}**`;
 
             await interaction.editReply({ 
               content: description
