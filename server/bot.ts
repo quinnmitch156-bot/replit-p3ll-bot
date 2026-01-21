@@ -314,12 +314,10 @@ export async function startBot() {
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
-            (type: string, name: string) => `https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`,
+            (type: string, name: string) => `https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`,
             (type: string, name: string) => `https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://xresolver.com/api/resolve?type=${type}&username=${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://resolved.xyz/api/v1/resolve?platform=${type}&username=${encodeURIComponent(name)}`
+            (type: string, name: string) => `https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`
           ];
 
           let resolvedData = null;
@@ -361,13 +359,8 @@ export async function startBot() {
                  .setDescription(`Successfully resolved IP for **${targetName}**.`);
             await interaction.editReply({ embeds: [embed] });
           } else {
-            // Check if it's a known specific case or common error
-            const description = targetName.toLowerCase() === 'joshypg' 
-              ? `❌ No IP found for **${targetName}** in any active resolver databases.\n\n**Analysis:** This user is likely not registered in any public "sniffing" databases like xResolver or L3P. They may need to be active in a party while someone is using a network sniffer for their IP to be captured and added to these databases.`
-              : `❌ No IP found for **${targetName}** in any active resolver databases.\n\n**Why is this?**\nPublic resolvers only store IPs of users who have been "sniffed" or registered in the past. If the user has never been looked up before or doesn't use party chat frequently, they won't appear in these databases.`;
-
             await interaction.editReply({ 
-              content: description
+              content: `No IP found for **${targetName}**.`
             });
           }
           break;
