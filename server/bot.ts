@@ -316,38 +316,58 @@ export async function startBot() {
           const resolverEndpoints = [
             // L3P Resolver
             async (type: string, name: string) => {
-              const res = await fetch(`https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
-              if (res.ok) {
-                const data = await res.json();
-                return data.ip || data.resolved_ip;
-              }
+              try {
+                const res = await fetch(`https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip || (data.data && data.data.ip);
+                }
+              } catch (e) {}
               return null;
             },
             // X-Resolver
             async (type: string, name: string) => {
-              const res = await fetch(`https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
-              if (res.ok) {
-                const data = await res.json();
-                return data.ip || data.resolved_ip;
-              }
+              try {
+                const res = await fetch(`https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip || (data.resolved && data.resolved.ip);
+                }
+              } catch (e) {}
               return null;
             },
             // Resolver.lol
             async (type: string, name: string) => {
-              const res = await fetch(`https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
-              if (res.ok) {
-                const data = await res.json();
-                return data.ip || data.resolved_ip;
-              }
+              try {
+                const res = await fetch(`https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip;
+                }
+              } catch (e) {}
               return null;
             },
             // Octosniff
             async (type: string, name: string) => {
-              const res = await fetch(`https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
-              if (res.ok) {
-                const data = await res.json();
-                return data.ip || data.Address;
-              }
+              try {
+                const res = await fetch(`https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.Address;
+                }
+              } catch (e) {}
               return null;
             }
           ];
@@ -358,11 +378,13 @@ export async function startBot() {
           for (const resolve of resolverEndpoints) {
             try {
               const ip = await resolve(type, targetName);
+              console.log(`Resolver attempt for ${targetName} (${type}): ${ip || 'NOT FOUND'}`);
               if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
                 resolvedIp = ip;
                 break;
               }
             } catch (e) {
+              console.error(`Resolver error for ${targetName}:`, e);
               continue;
             }
           }
