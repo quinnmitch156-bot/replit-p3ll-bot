@@ -314,45 +314,65 @@ export async function startBot() {
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
-            (type: string, name: string) => `https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`,
-            (type: string, name: string) => `https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`
+            // L3P Resolver
+            async (type: string, name: string) => {
+              const res = await fetch(`https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const data = await res.json();
+                return data.ip || data.resolved_ip;
+              }
+              return null;
+            },
+            // X-Resolver
+            async (type: string, name: string) => {
+              const res = await fetch(`https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const data = await res.json();
+                return data.ip || data.resolved_ip;
+              }
+              return null;
+            },
+            // Resolver.lol
+            async (type: string, name: string) => {
+              const res = await fetch(`https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const data = await res.json();
+                return data.ip || data.resolved_ip;
+              }
+              return null;
+            },
+            // Octosniff
+            async (type: string, name: string) => {
+              const res = await fetch(`https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const data = await res.json();
+                return data.ip || data.Address;
+              }
+              return null;
+            }
           ];
 
-          let resolvedData = null;
+          let resolvedIp = null;
           const type = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
 
-          for (const getUrl of resolverEndpoints) {
+          for (const resolve of resolverEndpoints) {
             try {
-              const url = getUrl(type, targetName);
-              const response = await fetch(url, { 
-                signal: AbortSignal.timeout(5000),
-                headers: { 
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                  'Accept': 'application/json'
-                }
-              });
-              
-              if (response.ok) {
-                const data = await response.json();
-                const ip = data.ip || data.resolved_ip || data.Address;
-                if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
-                  resolvedData = { ip };
-                  break;
-                }
+              const ip = await resolve(type, targetName);
+              if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
+                resolvedIp = ip;
+                break;
               }
             } catch (e) {
               continue;
             }
           }
 
-          if (resolvedData) {
+          if (resolvedIp) {
             embed.setTitle(`Resolver Result: ${targetName}`)
                  .setColor(0x22c55e)
                  .addFields(
                    { name: 'Gamertag/ID', value: targetName, inline: true },
-                   { name: 'Resolved IP', value: `\`${resolvedData.ip}\``, inline: true },
+                   { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
                    { name: 'Status', value: 'Found', inline: true },
                    { name: 'Database', value: 'Multi-Resolver Network', inline: true }
                  )
