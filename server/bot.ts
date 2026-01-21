@@ -314,6 +314,34 @@ export async function startBot() {
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
+            // Psychotic Resolver
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://psychotic.pro/api/resolver/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Lanc Remastered DB
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://lanc-remastered.net/api/resolver/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip;
+                }
+              } catch (e) {}
+              return null;
+            },
             // L3P Resolver
             async (type: string, name: string) => {
               try {
@@ -338,34 +366,6 @@ export async function startBot() {
                 if (res.ok) {
                   const data = await res.json();
                   return data.ip || data.resolved_ip || (data.resolved && data.resolved.ip);
-                }
-              } catch (e) {}
-              return null;
-            },
-            // Resolver.lol
-            async (type: string, name: string) => {
-              try {
-                const res = await fetch(`https://resolver.lol/api/resolve?platform=${type}&username=${encodeURIComponent(name)}`, { 
-                  signal: AbortSignal.timeout(5000),
-                  headers: { 'User-Agent': 'Mozilla/5.0' }
-                });
-                if (res.ok) {
-                  const data = await res.json();
-                  return data.ip || data.resolved_ip;
-                }
-              } catch (e) {}
-              return null;
-            },
-            // Octosniff
-            async (type: string, name: string) => {
-              try {
-                const res = await fetch(`https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`, { 
-                  signal: AbortSignal.timeout(5000),
-                  headers: { 'User-Agent': 'Mozilla/5.0' }
-                });
-                if (res.ok) {
-                  const data = await res.json();
-                  return data.ip || data.Address;
                 }
               } catch (e) {}
               return null;
