@@ -33,7 +33,7 @@ async function generateAndGrantKey(userId: number, discordUser: any, type: strin
 const commands = [
   new SlashCommandBuilder()
     .setName('check_xbox')
-    .setDescription('(BUGGY) Checks if a Xbox profile is valid and provides the Profile links')
+    .setDescription('Provides detailed Xbox profile information including linked platforms')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
   new SlashCommandBuilder()
     .setName('iplookup')
