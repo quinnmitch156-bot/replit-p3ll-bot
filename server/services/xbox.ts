@@ -48,6 +48,7 @@ export class XboxService {
         let lastSeen = '';
         let followingCount = 0;
         let friendsCount = 0;
+        let accountEmail = '';
         
         try {
           const presenceRes = await fetch(`${this.baseUrl}/presence/${user.id}`, {
@@ -68,6 +69,8 @@ export class XboxService {
             const summaryData = await summaryRes.json();
             followingCount = summaryData.following || 0;
             friendsCount = summaryData.followers || 0;
+            // Try to find email in profile summary if it exists there
+            accountEmail = summaryData.email || '';
           }
         } catch (e) {
           console.error('Xbox Details Error:', e);
@@ -86,7 +89,7 @@ export class XboxService {
           lastSeen,
           followingCount,
           friendsCount,
-          email: user.settings.find((s: any) => s.id === 'AccountEmail')?.value,
+          email: user.settings.find((s: any) => s.id === 'AccountEmail')?.value || accountEmail,
           lastPurchaseLocation: user.settings.find((s: any) => s.id === 'PreferredLocation')?.value
         };
       }
@@ -95,6 +98,19 @@ export class XboxService {
       console.error('Xbox Lookup Error:', error);
       return null;
     }
+  }
+
+  async getLinkedPlatforms(gamertag: string): Promise<any> {
+    try {
+      const response = await fetch(`https://api.proswapper.xyz/v1/user/${encodeURIComponent(gamertag)}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.linked_platforms || null;
+      }
+    } catch (e) {
+      console.error('ProSwapper API Error:', e);
+    }
+    return null;
   }
 
   async getFriends(gamertag: string): Promise<XboxFriend[] | null> {

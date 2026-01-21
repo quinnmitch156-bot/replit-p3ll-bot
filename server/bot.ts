@@ -241,7 +241,12 @@ export async function startBot() {
         case 'check_xbox':
           const gt = interaction.options.getString('xbox_name', true);
           await interaction.deferReply();
-          const profile = await xboxService.searchGamertag(gt);
+          
+          const [profile, linkedPlatforms] = await Promise.all([
+            xboxService.searchGamertag(gt),
+            xboxService.getLinkedPlatforms(gt)
+          ]);
+
           if (profile) {
             embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
                  .setThumbnail(profile.displayPicRaw)
@@ -256,9 +261,22 @@ export async function startBot() {
                    { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
                    { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true },
                    { name: 'Friends', value: profile.friendsCount?.toString() || '0', inline: true },
-                   { name: 'Email', value: profile.email ? `\`${profile.email}\`` : '`Not Available`', inline: true },
-                   { name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true }
+                   { name: 'Email', value: profile.email ? `\`${profile.email}\`` : '`Not Available`', inline: true }
                  );
+
+            if (linkedPlatforms) {
+              const platforms = Object.entries(linkedPlatforms)
+                .filter(([_, val]) => val)
+                .map(([key, val]) => `${key.toUpperCase()}: \`${val}\``)
+                .join('\n');
+              
+              if (platforms) {
+                embed.addFields({ name: 'Linked Platforms', value: platforms, inline: false });
+              }
+            }
+
+            embed.addFields({ name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true });
+
             await interaction.editReply({ embeds: [embed] });
           } else {
             await interaction.editReply({ content: 'Xbox profile not found.' });
