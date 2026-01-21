@@ -57,20 +57,19 @@ export class XboxService {
           if (presenceRes.ok) {
             const presenceData = await presenceRes.json();
             presenceState = presenceData.state || 'Offline';
-            presenceText = presenceData.lastSeen?.titleName || 'None';
-            lastSeen = presenceData.lastSeen?.timestamp || '';
+            presenceText = presenceData.lastSeen?.titleName || presenceData.devices?.[0]?.titles?.[0]?.name || 'None';
+            lastSeen = presenceData.lastSeen?.timestamp || presenceData.devices?.[0]?.titles?.[0]?.lastModified || '';
           }
           
           // Fetch profile summary for counts
-          const summaryRes = await fetch(`${this.baseUrl}/profile/summary/${user.id}`, {
+          const summaryRes = await fetch(`${this.baseUrl}/profile/settings/${user.id}?settings=FollowingCount,FollowerCount`, {
             headers: { 'X-Authorization': this.apiKey }
           });
           if (summaryRes.ok) {
             const summaryData = await summaryRes.json();
-            followingCount = summaryData.following || 0;
-            friendsCount = summaryData.followers || 0;
-            // Try to find email in profile summary if it exists there
-            accountEmail = summaryData.email || '';
+            const settings = summaryData.profileUsers?.[0]?.settings || [];
+            followingCount = parseInt(settings.find((s: any) => s.id === 'FollowingCount')?.value || '0');
+            friendsCount = parseInt(settings.find((s: any) => s.id === 'FollowerCount')?.value || '0');
           }
         } catch (e) {
           console.error('Xbox Details Error:', e);
