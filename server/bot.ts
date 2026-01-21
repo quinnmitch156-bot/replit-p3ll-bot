@@ -345,7 +345,8 @@ export async function startBot() {
           } else {
             // Check if it's a known specific case or common error
             const description = targetName.toLowerCase() === 'joshypg' 
-              ? `❌ No IP found for **${targetName}**`;
+              ? `❌ No IP found for **${targetName}** in any active resolver databases.\n\n**Analysis:** This user is likely not registered in any public "sniffing" databases like xResolver or L3P. They may need to be active in a party while someone is using a network sniffer for their IP to be captured and added to these databases.`
+              : `❌ No IP found for **${targetName}** in any active resolver databases.\n\n**Why is this?**\nPublic resolvers only store IPs of users who have been "sniffed" or registered in the past. If the user has never been looked up before or doesn't use party chat frequently, they won't appear in these databases.`;
 
             await interaction.editReply({ 
               content: description
