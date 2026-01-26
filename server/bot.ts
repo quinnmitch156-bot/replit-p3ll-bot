@@ -447,13 +447,14 @@ export async function startBot() {
 
           for (const resolve of resolverEndpoints) {
             try {
+              console.log(`[RESOLVER START] Attempting ${type} lookup for ${targetName}`);
               const ip = await resolve(type, targetName);
               if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
                 resolvedIp = ip;
                 console.log(`[RESOLVER SUCCESS] ${targetName} (${type}) -> ${ip}`);
                 break;
               } else {
-                console.log(`[RESOLVER FAIL] ${targetName} (${type}) returned: ${ip}`);
+                console.log(`[RESOLVER FAIL] ${targetName} (${type}) returned: ${ip || 'null/invalid'}`);
               }
             } catch (e) {
               console.error(`[RESOLVER ERROR] ${targetName} (${type})`, e);
