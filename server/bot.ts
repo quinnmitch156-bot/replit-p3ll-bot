@@ -314,38 +314,10 @@ export async function startBot() {
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
-            // Psychotic Resolver
+            // Custom DB 1: L3P (updated endpoint)
             async (type: string, name: string) => {
               try {
-                const res = await fetch(`https://psychotic.pro/api/resolver/${type}/${encodeURIComponent(name)}`, { 
-                  signal: AbortSignal.timeout(5000),
-                  headers: { 'User-Agent': 'Mozilla/5.0' }
-                });
-                if (res.ok) {
-                  const data = await res.json();
-                  return data.ip || data.resolved_ip;
-                }
-              } catch (e) {}
-              return null;
-            },
-            // Lanc Remastered DB
-            async (type: string, name: string) => {
-              try {
-                const res = await fetch(`https://lanc-remastered.net/api/resolver/${type}/${encodeURIComponent(name)}`, { 
-                  signal: AbortSignal.timeout(5000),
-                  headers: { 'User-Agent': 'Mozilla/5.0' }
-                });
-                if (res.ok) {
-                  const data = await res.json();
-                  return data.ip || data.resolved_ip;
-                }
-              } catch (e) {}
-              return null;
-            },
-            // L3P Resolver
-            async (type: string, name: string) => {
-              try {
-                const res = await fetch(`https://api.l3p.xyz/resolver?type=${type}&username=${encodeURIComponent(name)}`, { 
+                const res = await fetch(`https://api.l3p.xyz/resolver/${type}/${encodeURIComponent(name)}`, { 
                   signal: AbortSignal.timeout(5000),
                   headers: { 'User-Agent': 'Mozilla/5.0' }
                 });
@@ -356,7 +328,35 @@ export async function startBot() {
               } catch (e) {}
               return null;
             },
-            // X-Resolver
+            // Custom DB 2: Psychotic (fallback)
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://api.psychotic.pro/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.Address;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 3: Lanc Remastered (database lookup)
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://lanc-remastered.net/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 4: X-Resolver (Legacy check)
             async (type: string, name: string) => {
               try {
                 const res = await fetch(`https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { 
@@ -378,13 +378,15 @@ export async function startBot() {
           for (const resolve of resolverEndpoints) {
             try {
               const ip = await resolve(type, targetName);
-              console.log(`Resolver attempt for ${targetName} (${type}): ${ip || 'NOT FOUND'}`);
               if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
                 resolvedIp = ip;
+                console.log(`[RESOLVER SUCCESS] ${targetName} (${type}) -> ${ip}`);
                 break;
+              } else {
+                console.log(`[RESOLVER FAIL] ${targetName} (${type}) returned: ${ip}`);
               }
             } catch (e) {
-              console.error(`Resolver error for ${targetName}:`, e);
+              console.error(`[RESOLVER ERROR] ${targetName} (${type})`, e);
               continue;
             }
           }
