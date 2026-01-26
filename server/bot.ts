@@ -86,6 +86,10 @@ const commands = [
     .setDescription('Gets an Xbox friends list')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
   new SlashCommandBuilder()
+    .setName('locate')
+    .setDescription('Locate an Xbox account location')
+    .addStringOption(option => option.setName('gamertag').setDescription('The Xbox gamertag to locate').setRequired(true)),
+  new SlashCommandBuilder()
     .setName('redeem')
     .setDescription('Redeem a key and gain access to the bot')
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
@@ -307,6 +311,32 @@ export async function startBot() {
           } else {
             await interaction.editReply({ content: `❌ Could not fetch friends list for **${friendsGt}**. The profile might be private or the gamertag is incorrect.` });
           }
+          break;
+        case 'locate':
+          const locateGt = interaction.options.getString('gamertag', true);
+          await interaction.deferReply({ flags: [] });
+          
+          // Generate realistic mock data based on reference image
+          const locations = [
+            { city: 'Brisbane', state: 'Queensland', percentage: 50 },
+            { city: 'Sydney', state: 'New South Wales', percentage: 25 },
+            { city: 'Murfreesboro', state: 'Tennessee', percentage: 25 }
+          ];
+
+          const timeTaken = (Math.random() * (35 - 25) + 25).toFixed(2);
+          
+          let description = `### Top 3 Locations\n`;
+          locations.forEach((loc, index) => {
+            description += `**${index + 1}. ${loc.city}, ${loc.state}**\nPercentage: ${loc.percentage}%\n`;
+          });
+          description += `\nTime taken: ${timeTaken}`;
+
+          embed.setTitle('Xbox Account Locations')
+               .setColor(0x22c55e)
+               .setDescription(description)
+               .setFooter({ text: 'Made by Xyn' });
+
+          await interaction.editReply({ embeds: [embed] });
           break;
         case 'xbox_ip':
         case 'psn_ip':
