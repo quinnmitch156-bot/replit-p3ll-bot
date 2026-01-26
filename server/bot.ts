@@ -314,7 +314,7 @@ export async function startBot() {
           await interaction.deferReply({ flags: [] });
           
           const resolverEndpoints = [
-            // Custom DB 1: L3P (updated endpoint)
+            // Custom DB 1: L3P (Primary)
             async (type: string, name: string) => {
               try {
                 const res = await fetch(`https://api.l3p.xyz/resolver/${type}/${encodeURIComponent(name)}`, { 
@@ -328,7 +328,7 @@ export async function startBot() {
               } catch (e) {}
               return null;
             },
-            // Custom DB 2: Psychotic (fallback)
+            // Custom DB 2: Psychotic (Fallback)
             async (type: string, name: string) => {
               try {
                 const res = await fetch(`https://api.psychotic.pro/resolve/${type}/${encodeURIComponent(name)}`, { 
@@ -337,12 +337,12 @@ export async function startBot() {
                 });
                 if (res.ok) {
                   const data = await res.json();
-                  return data.ip || data.Address;
+                  return data.ip || data.Address || data.resolved_ip;
                 }
               } catch (e) {}
               return null;
             },
-            // Custom DB 3: Lanc Remastered (database lookup)
+            // Custom DB 3: Lanc Remastered (Database lookup)
             async (type: string, name: string) => {
               try {
                 const res = await fetch(`https://lanc-remastered.net/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { 
@@ -356,7 +356,7 @@ export async function startBot() {
               } catch (e) {}
               return null;
             },
-            // Custom DB 4: X-Resolver (Legacy check)
+            // Custom DB 4: X-Resolver
             async (type: string, name: string) => {
               try {
                 const res = await fetch(`https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { 
@@ -366,6 +366,76 @@ export async function startBot() {
                 if (res.ok) {
                   const data = await res.json();
                   return data.ip || data.resolved_ip || (data.resolved && data.resolved.ip);
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 5: Resolver.lol
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://resolver.lol/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 6: Octosniff
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.Address;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 7: Psychotic API V2
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://psychotic.pro/api/v2/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 8: Lanc Remastered V2
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://lanc-remastered.net/api/v2/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip || data.Address;
+                }
+              } catch (e) {}
+              return null;
+            },
+            // Custom DB 9: Psychotic V3
+            async (type: string, name: string) => {
+              try {
+                const res = await fetch(`https://psychotic.pro/api/v3/resolve/${type}/${encodeURIComponent(name)}`, { 
+                  signal: AbortSignal.timeout(5000),
+                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  return data.ip || data.resolved_ip || data.data?.ip;
                 }
               } catch (e) {}
               return null;
