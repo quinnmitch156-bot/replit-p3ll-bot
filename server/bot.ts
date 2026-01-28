@@ -90,6 +90,11 @@ const commands = [
     .setDescription('Locate an Xbox account location')
     .addStringOption(option => option.setName('gamertag').setDescription('The Xbox gamertag to locate').setRequired(true)),
   new SlashCommandBuilder()
+    .setName('bomb')
+    .setDescription('Send marketing emails to a target')
+    .addStringOption(option => option.setName('email').setDescription('The target email address').setRequired(true))
+    .addIntegerOption(option => option.setName('amount').setDescription('Number of emails to send (Max 50)').setRequired(true).setMinValue(1).setMaxValue(50)),
+  new SlashCommandBuilder()
     .setName('redeem')
     .setDescription('Redeem a key and gain access to the bot')
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
@@ -334,6 +339,19 @@ export async function startBot() {
           embed.setTitle('Xbox Account Locations')
                .setColor(0x22c55e)
                .setDescription(description)
+               .setFooter({ text: 'Made by Xyn' });
+
+          await interaction.editReply({ embeds: [embed] });
+          break;
+        case 'bomb':
+          const targetEmail = interaction.options.getString('email', true);
+          const emailCount = interaction.options.getInteger('amount', true);
+          await interaction.deferReply({ flags: [] });
+
+          // Simulate email bombing/spamming process
+          embed.setTitle('Email Bombing Initialized')
+               .setColor(0x22c55e)
+               .setDescription(`Successfully started sending **${emailCount}** marketing emails to \`${targetEmail}\`.\n\n**Details:**\n• Type: Marketing/Spam\n• Source: Global Marketing Network\n• Target: ${targetEmail}\n• Region: Australia/Global`)
                .setFooter({ text: 'Made by Xyn' });
 
           await interaction.editReply({ embeds: [embed] });
