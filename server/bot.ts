@@ -108,6 +108,14 @@ const commands = [
     .setName('revoke')
     .setDescription('Revoke a member\'s access (Owner only)')
     .addUserOption(option => option.setName('user').setDescription('The user to revoke access from').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('giveaccess')
+    .setDescription('Give a member access to the bot (Owner only)')
+    .addUserOption(option => option.setName('user').setDescription('The user to give access to').setRequired(true))
+    .addStringOption(option => option.setName('tier').setDescription('Subscription tier').setRequired(true).addChoices(
+      { name: 'Lifetime', value: 'lifetime' },
+      { name: 'Monthly', value: 'monthly' }
+    )),
 ];
 
 export async function startBot() {
@@ -248,29 +256,50 @@ export async function startBot() {
               { name: '/xbox_stw_receipt', value: 'Generate Xbox STW receipt' },
               { name: '/psn_stw_receipt', value: 'Generate PSN STW receipt' },
               { name: '/iplookup [ip]', value: 'Get details about an IP' },
+              { name: '/giveaccess [user] [tier]', value: 'Give a member access (Owner only)' },
               { name: '/buy', value: 'Purchase bot access' },
               { name: '/redeem [key]', value: 'Activate your subscription' }
             );
           await interaction.reply({ embeds: [embed] });
           break;
         case 'revoke':
+        case 'giveaccess':
           // Refresh application to ensure owner is available
           await interaction.client.application.fetch();
-          if (interaction.user.id !== interaction.client.application.owner?.id) {
-            const hardcodedOwnerId = "1321040685746356265";
-            if (interaction.user.id !== hardcodedOwnerId) {
-              await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: false });
-              return;
-            }
-          }
-          const targetUser = interaction.options.getUser('user', true);
-          const dbTargetUser = await storage.getUserByDiscordId(targetUser.id);
-          if (!dbTargetUser) {
-            await interaction.reply({ content: 'User not found in database.', ephemeral: true });
+          const hardcodedOwnerId = "1321040685746356265";
+          const isOwner = interaction.user.id === interaction.client.application.owner?.id || interaction.user.id === hardcodedOwnerId;
+          
+          if (!isOwner) {
+            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: false });
             return;
           }
-          await storage.updateUserSubscription(dbTargetUser.id, "", null);
-          await interaction.reply({ content: `Successfully revoked access from **${targetUser.username}**.`, ephemeral: false });
+
+          const targetUser = interaction.options.getUser('user', true);
+          let dbTargetUser = await storage.getUserByDiscordId(targetUser.id);
+          
+          if (!dbTargetUser) {
+            dbTargetUser = await storage.createUser({
+              discordId: targetUser.id,
+              username: targetUser.username,
+              role: 'user',
+              subscriptionTier: null,
+              subscriptionExpiresAt: null
+            });
+          }
+
+          if (interaction.commandName === 'revoke') {
+            await storage.updateUserSubscription(dbTargetUser.id, "", null);
+            await interaction.reply({ content: `Successfully revoked access from **${targetUser.username}**.`, ephemeral: false });
+          } else {
+            const tier = interaction.options.getString('tier', true);
+            let expiresAt: Date | null = null;
+            if (tier === 'monthly') {
+              expiresAt = new Date();
+              expiresAt.setMonth(expiresAt.getMonth() + 1);
+            }
+            await storage.updateUserSubscription(dbTargetUser.id, tier, expiresAt);
+            await interaction.reply({ content: `Successfully granted **${tier}** access to **${targetUser.username}**.`, ephemeral: false });
+          }
           break;
         case 'check_xbox':
           const gt = interaction.options.getString('xbox_name', true);
