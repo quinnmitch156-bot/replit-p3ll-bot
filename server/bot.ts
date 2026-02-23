@@ -266,10 +266,16 @@ export async function startBot() {
         case 'giveaccess':
           // Refresh application to ensure owner is available
           await interaction.client.application.fetch();
-          const hardcodedOwnerId = "1321040685746356265";
-          const isOwner = interaction.user.id === interaction.client.application.owner?.id || interaction.user.id === hardcodedOwnerId;
+          const ownerIdFromSecret = process.env.OWNER_ID;
+          const botAccessRoleId = process.env.BOT_ACCESS_ROLE_ID;
           
-          if (!isOwner) {
+          const isOwner = interaction.user.id === interaction.client.application.owner?.id || 
+                          (ownerIdFromSecret && interaction.user.id === ownerIdFromSecret);
+          
+          const hasAccessRole = botAccessRoleId && interaction.member && 'roles' in interaction.member && 
+                                (interaction.member.roles as any).cache.has(botAccessRoleId);
+
+          if (!isOwner && !hasAccessRole) {
             await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: false });
             return;
           }
