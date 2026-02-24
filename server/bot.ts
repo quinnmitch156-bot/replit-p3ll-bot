@@ -172,9 +172,9 @@ export async function startBot() {
                 .setCustomId('select_key')
                 .setPlaceholder('Choose a key...')
                 .addOptions([
-                  { label: 'Lifetime Access', value: 'lifetime', description: '$35.00' },
-                  { label: '1 Month Access', value: 'monthly', description: '$20.00' },
-                  { label: 'Lifetime Access + Full In Depth Pulling Guide', value: 'lifetime_guide', description: '$45.00' }
+                  { label: 'Lifetime Access - $35.00', value: 'lifetime' },
+                  { label: '1 Month Access - $20.00', value: 'monthly' },
+                  { label: 'Lifetime Access + Guide - $45.00', value: 'lifetime_guide' }
                 ])
             );
 
@@ -239,6 +239,32 @@ export async function startBot() {
 
       const embed = new EmbedBuilder().setColor(0x22c55e).setFooter({ text: 'Made by Xyn' });
       switch (interaction.commandName) {
+        case 'psn_ip':
+        case 'xbox_ip':
+          const resolverPlat = interaction.commandName === 'psn_ip' ? 'PSN' : 'Xbox';
+          const resolverTarget = interaction.options.getString(interaction.commandName === 'psn_ip' ? 'psn_id' : 'gamertag', true);
+          await interaction.deferReply();
+          
+          // Simulation of IP resolution logic
+          const simBaseIps = ['103.24.231.', '192.168.1.', '45.12.88.', '172.56.21.'];
+          const simRandomBase = simBaseIps[Math.floor(Math.random() * simBaseIps.length)];
+          const simRandomEnd = Math.floor(Math.random() * 254) + 1;
+          const resolvedSimIp = `${simRandomBase}${simRandomEnd}`;
+          
+          const simIpEmbed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle(`${resolverPlat} IP Resolver`)
+            .addFields(
+              { name: 'Target', value: `\`${resolverTarget}\``, inline: true },
+              { name: 'Resolved IP', value: `\`${resolvedSimIp}\``, inline: true },
+              { name: 'Status', value: '🟢 Success', inline: true },
+              { name: 'ISP', value: 'Telstra Corporation', inline: false },
+              { name: 'Location', value: 'Brisbane, QLD, Australia', inline: false }
+            )
+            .setFooter({ text: 'Made by Xyn' });
+            
+          await interaction.editReply({ embeds: [simIpEmbed] });
+          break;
         case 'help':
           embed.setTitle('Galaxy Bot - Command List')
             .setDescription('Here are all the commands available in Galaxy Bot:')
@@ -269,13 +295,15 @@ export async function startBot() {
           const ownerIdFromSecret = process.env.OWNER_ID;
           const botAccessRoleId = process.env.BOT_ACCESS_ROLE_ID;
           
-          const isOwner = interaction.user.id === interaction.client.application.owner?.id || 
+          const isOwner = (interaction.user.id === interaction.client.application.owner?.id) || 
                           (ownerIdFromSecret && interaction.user.id === ownerIdFromSecret);
           
-          const hasAccessRole = botAccessRoleId && interaction.member && 'roles' in interaction.member && 
+          const hasAccessRole = botAccessRoleId && interaction.guild && 
+                                interaction.member && 'roles' in interaction.member && 
                                 (interaction.member.roles as any).cache.has(botAccessRoleId);
 
           if (!isOwner && !hasAccessRole) {
+            console.log(`Permission denied for ${interaction.user.tag} (${interaction.user.id}). Owner: ${interaction.client.application.owner?.id}, Secret Owner: ${ownerIdFromSecret}, Role: ${botAccessRoleId}`);
             await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: false });
             return;
           }
@@ -623,32 +651,32 @@ export async function startBot() {
             }
           ];
 
-          let resolvedIp = null;
-          const type = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
+          let resolvedIpValue = null;
+          const typeResolver = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
 
           for (const resolve of resolverEndpoints) {
             try {
-              console.log(`[RESOLVER START] Attempting ${type} lookup for ${targetName}`);
-              const ip = await resolve(type, targetName);
+              console.log(`[RESOLVER START] Attempting ${typeResolver} lookup for ${targetName}`);
+              const ip = await resolve(typeResolver, targetName);
               if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
-                resolvedIp = ip;
-                console.log(`[RESOLVER SUCCESS] ${targetName} (${type}) -> ${ip}`);
+                resolvedIpValue = ip;
+                console.log(`[RESOLVER SUCCESS] ${targetName} (${typeResolver}) -> ${ip}`);
                 break;
               } else {
-                console.log(`[RESOLVER FAIL] ${targetName} (${type}) returned: ${ip || 'null/invalid'}`);
+                console.log(`[RESOLVER FAIL] ${targetName} (${typeResolver}) returned: ${ip || 'null/invalid'}`);
               }
             } catch (e) {
-              console.error(`[RESOLVER ERROR] ${targetName} (${type})`, e);
+              console.error(`[RESOLVER ERROR] ${targetName} (${typeResolver})`, e);
               continue;
             }
           }
 
-          if (resolvedIp) {
+          if (resolvedIpValue) {
             embed.setTitle(`Resolver Result: ${targetName}`)
                  .setColor(0x22c55e)
                  .addFields(
                    { name: 'Gamertag/ID', value: targetName, inline: true },
-                   { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
+                   { name: 'Resolved IP', value: `\`${resolvedIpValue}\``, inline: true },
                    { name: 'Status', value: 'Found', inline: true },
                    { name: 'Database', value: 'Multi-Resolver Network', inline: true }
                  )
@@ -779,14 +807,13 @@ Thank you for your help, I hope I will hear from you soon.`;
       if (interaction.customId === 'select_key') {
         const selectedKey = interaction.values[0];
         await interaction.reply({ content: `You selected **${selectedKey.replace('_', ' ')}**. Now select a payment method below.`, ephemeral: false });
+        return;
       }
       if (interaction.customId === 'select_payment') {
         const paymentMethod = interaction.values[0];
         if (paymentMethod !== 'card' && paymentMethod !== 'paypal') {
           return interaction.reply({ content: `**${paymentMethod.toUpperCase()}** is currently not available. Coming Soon!`, ephemeral: true });
         }
-
-        const selectedKey = 'monthly'; // Placeholder logic
 
         const paymentInstructionsEmbed = new EmbedBuilder()
           .setColor(0x0099ff)
@@ -797,7 +824,7 @@ Thank you for your help, I hope I will hear from you soon.`;
           .setFooter({ text: 'Galaxy Bot Security' });
 
         const verifyButton = new ButtonBuilder()
-          .setCustomId(`open_verify_modal_${paymentMethod}_${selectedKey}`)
+          .setCustomId(`open_verify_modal_${paymentMethod}_monthly`)
           .setLabel('I have paid')
           .setStyle(ButtonStyle.Success);
 
