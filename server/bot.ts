@@ -157,6 +157,18 @@ export async function startBot() {
         details: interaction.options.data.reduce((acc, opt) => ({ ...acc, [opt.name]: opt.value }), {})
       });
 
+      // Bypass subscription check for Owner and Bot Access Role
+      const ownerIdFromSecret = process.env.OWNER_ID;
+      const botAccessRoleId = process.env.BOT_ACCESS_ROLE_ID;
+      
+      await interaction.client.application.fetch();
+      const isSystemOwner = (interaction.user.id === interaction.client.application.owner?.id) || 
+                            (ownerIdFromSecret && interaction.user.id === ownerIdFromSecret);
+      
+      const hasSystemAccessRole = botAccessRoleId && interaction.guild && 
+                                  interaction.member && 'roles' in interaction.member && 
+                                  (interaction.member.roles as any).cache.has(botAccessRoleId);
+
       if (interaction.commandName === 'buy') {
         try {
           const embed = new EmbedBuilder()
@@ -226,7 +238,7 @@ export async function startBot() {
         return;
       }
 
-      const hasAccess = user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
+      const hasAccess = isSystemOwner || hasSystemAccessRole || user.subscriptionTier === 'lifetime' || (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > new Date());
       if (!hasAccess) {
         const errorEmbed = new EmbedBuilder()
           .setColor(0xff0000)
