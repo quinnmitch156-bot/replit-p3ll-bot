@@ -763,7 +763,7 @@ Thank you for your help, I hope I will hear from you soon.`;
               process.env.Authorization ? fetch('https://api.snusbase.com/data/search', {
                 method: 'POST',
                 headers: {
-                  'Authorization': process.env.Authorization,
+                  'Auth': process.env.Authorization,
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
