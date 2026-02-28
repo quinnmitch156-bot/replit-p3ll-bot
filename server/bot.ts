@@ -749,32 +749,64 @@ Thank you for your help, I hope I will hear from you soon.`;
           await interaction.editReply({ embeds: [embed] });
           break;
         case 'xbox_aov':
-          const xboxName = interaction.options.getString('gamertag', true);
-          const xboxIp = interaction.options.getString('ip', true);
+          const xboxAovGt = interaction.options.getString('gamertag', true);
+          const xboxAovIp = interaction.options.getString('ip', true);
           
           await interaction.deferReply();
           
-          let xboxLocation = 'Unknown, Unknown';
+          let xboxAovLocation = 'Unknown, Unknown';
+          let xboxAovEmail = '`Not Found`';
+          
           try {
-            const ipRes = await fetch(`http://ip-api.com/json/${xboxIp}`);
+            const [ipRes, snusRes] = await Promise.all([
+              fetch(`http://ip-api.com/json/${xboxAovIp}`),
+              process.env.Authorization ? fetch('https://api.snusbase.com/data/search', {
+                method: 'POST',
+                headers: {
+                  'Authorization': process.env.Authorization,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  terms: [xboxAovGt],
+                  types: ['username'],
+                  wildcard: false
+                })
+              }) : Promise.resolve(null)
+            ]);
+
             const ipData = await ipRes.json();
             if (ipData.status === 'success') {
-              xboxLocation = `${ipData.city}, ${ipData.country}`;
+              xboxAovLocation = `${ipData.city}, ${ipData.country}`;
+            }
+
+            if (snusRes && snusRes.ok) {
+              const snusData = await snusRes.json();
+              // Attempt to find an email in the results
+              if (snusData.results) {
+                for (const source in snusData.results) {
+                  const entry = snusData.results[source].find((r: any) => r.email);
+                  if (entry) {
+                    xboxAovEmail = `\`${entry.email}\``;
+                    break;
+                  }
+                }
+              }
             }
           } catch (e) {
-            console.error('Xbox AOV IP Lookup Error:', e);
+            console.error('Xbox AOV Enhancement Error:', e);
           }
 
-          const xboxScript = `Hello Epic Games, my IP is ${xboxIp}.
-My first Epic Games username was ${xboxName}.
-My purchases near ${xboxLocation}.
+          const xboxAovScript = `Hello Epic Games, my IP is ${xboxAovIp}.
+My first Epic Games username was ${xboxAovGt}.
+Linked Email: ${xboxAovEmail}
+My purchases near ${xboxAovLocation}.
 I never used my Credit Card for any purchases on Fortnite.
 I only payed my purchases using Microsoft Account balance, therefore there are no invoice ids.
 Below I have attached a screenshot of my oldest purchase.
 Thank you for your help, I hope I will hear from you soon.`;
 
-          embed.setTitle(`AOV successfully created for ${xboxName}:`)
-               .setDescription(xboxScript);
+          embed.setTitle(`Xbox AOV successfully created for ${xboxAovGt}:`)
+               .setDescription(xboxAovScript);
           await interaction.editReply({ embeds: [embed] });
           break;
         case 'iplookup':
