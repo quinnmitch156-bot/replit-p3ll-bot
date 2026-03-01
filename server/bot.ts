@@ -257,19 +257,58 @@ export async function startBot() {
           const resolverTarget = interaction.options.getString(interaction.commandName === 'psn_ip' ? 'psn_id' : 'gamertag', true);
           await interaction.deferReply();
           
-          // Simulation of IP resolution logic
-          const simBaseIps = ['103.24.231.', '192.168.1.', '45.12.88.', '172.56.21.'];
-          const simRandomBase = simBaseIps[Math.floor(Math.random() * simBaseIps.length)];
-          const simRandomEnd = Math.floor(Math.random() * 254) + 1;
-          const resolvedSimIp = `${simRandomBase}${simRandomEnd}`;
+          let resolvedIp = null;
+          let resolverSource = 'Simulation';
+
+          try {
+            if (process.env.Authorization) {
+              const snusRes = await fetch('https://api.snusbase.com/data/search', {
+                method: 'POST',
+                headers: {
+                  'Auth': process.env.Authorization,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  terms: [resolverTarget],
+                  types: ['username'],
+                  wildcard: false
+                })
+              });
+
+              if (snusRes.ok) {
+                const snusData = await snusRes.json();
+                if (snusData.results) {
+                  for (const source in snusData.results) {
+                    const entry = snusData.results[source].find((r: any) => r.last_ip || r.ip);
+                    if (entry) {
+                      resolvedIp = entry.last_ip || entry.ip;
+                      resolverSource = 'Snusbase';
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Snusbase IP Resolver Error:', e);
+          }
+
+          // Fallback to simulation if Snusbase fails or finds nothing
+          if (!resolvedIp) {
+            const simBaseIps = ['103.24.231.', '192.168.1.', '45.12.88.', '172.56.21.'];
+            const simRandomBase = simBaseIps[Math.floor(Math.random() * simBaseIps.length)];
+            const simRandomEnd = Math.floor(Math.random() * 254) + 1;
+            resolvedIp = `${simRandomBase}${simRandomEnd}`;
+          }
           
           const simIpEmbed = new EmbedBuilder()
             .setColor(0x22c55e)
             .setTitle(`${resolverPlat} IP Resolver`)
             .addFields(
               { name: 'Target', value: `\`${resolverTarget}\``, inline: true },
-              { name: 'Resolved IP', value: `\`${resolvedSimIp}\``, inline: true },
+              { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
               { name: 'Status', value: '🟢 Success', inline: true },
+              { name: 'Source', value: resolverSource, inline: true },
               { name: 'ISP', value: 'Telstra Corporation', inline: false },
               { name: 'Location', value: 'Brisbane, QLD, Australia', inline: false }
             )
