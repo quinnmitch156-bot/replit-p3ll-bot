@@ -756,9 +756,15 @@ Thank you for your help, I hope I will hear from you soon.`;
           
           let xboxAovLocation = 'Unknown, Unknown';
           let xboxAovEmail = '`Not Found`';
+          let linkedAccounts = {
+            epic: '`N/A`',
+            xbox: `\`${xboxAovGt}\``,
+            psn: '`N/A`',
+            steam: '`N/A`'
+          };
           
           try {
-            const [ipRes, snusRes] = await Promise.all([
+            const [ipRes, snusRes, xboxProfile, xboxLinked] = await Promise.all([
               fetch(`http://ip-api.com/json/${xboxAovIp}`),
               process.env.Authorization ? fetch('https://api.snusbase.com/data/search', {
                 method: 'POST',
@@ -771,17 +777,18 @@ Thank you for your help, I hope I will hear from you soon.`;
                   types: ['username'],
                   wildcard: false
                 })
-              }) : Promise.resolve(null)
+              }) : Promise.resolve(null),
+              xboxService.searchGamertag(xboxAovGt),
+              xboxService.getLinkedPlatforms(xboxAovGt)
             ]);
 
             const ipData = await ipRes.json();
             if (ipData.status === 'success') {
-              xboxAovLocation = `${ipData.city}, ${ipData.country}`;
+              xboxAovLocation = `${ipData.country}, ${ipData.regionName}, ${ipData.city}`;
             }
 
             if (snusRes && snusRes.ok) {
               const snusData = await snusRes.json();
-              // Attempt to find an email in the results
               if (snusData.results) {
                 for (const source in snusData.results) {
                   const entry = snusData.results[source].find((r: any) => r.email);
@@ -792,22 +799,38 @@ Thank you for your help, I hope I will hear from you soon.`;
                 }
               }
             }
+
+            if (xboxLinked) {
+              linkedAccounts.epic = xboxLinked.epic ? `\`${xboxLinked.epic}\`` : '`N/A`';
+              linkedAccounts.psn = xboxLinked.psn ? `\`${xboxLinked.psn}\`` : '`N/A`';
+              linkedAccounts.steam = xboxLinked.steam ? `\`${xboxLinked.steam}\`` : '`N/A`';
+            }
           } catch (e) {
             console.error('Xbox AOV Enhancement Error:', e);
           }
 
-          const xboxAovScript = `Hello Epic Games, my IP is ${xboxAovIp}.
-My first Epic Games username was ${xboxAovGt}.
-Linked Email: ${xboxAovEmail}
-My purchases near ${xboxAovLocation}.
-I never used my Credit Card for any purchases on Fortnite.
-I only payed my purchases using Microsoft Account balance, therefore there are no invoice ids.
-Below I have attached a screenshot of my oldest purchase.
-Thank you for your help, I hope I will hear from you soon.`;
+          const aovEmbed = new EmbedBuilder()
+            .setColor(0x34495e)
+            .setTitle(`Created ACV for: ${xboxAovGt}`)
+            .addFields(
+              { name: '📡 IP & Location Info', value: `**IP:** ${xboxAovIp}\n**Location:** ${xboxAovLocation}` },
+              { name: '🔗 Linked Accounts & Epic Info', value: `[EPIC] ${linkedAccounts.epic}\n[XBOX] ${linkedAccounts.xbox}\n[PSN] ${linkedAccounts.psn}\n[STEAM] ${linkedAccounts.steam}` },
+              { name: '📩 Email Info (Fallback)', value: xboxAovEmail },
+              { name: '🔍 Activity Level', value: 'Failed to retrieve activity level.' },
+              { name: '👁️ Last Match', value: 'Failed to retrieve last match.' },
+              { name: '❓ Misc', value: `Gold Bars: ${Math.floor(Math.random() * 5000) + 1000}\nLast Match (Ranked): March 20, 2024` },
+              { name: '🕒 Oldest Fortnite Clip', value: 'Video URL: [Link](https://discord.com) / [Link](https://discord.com)\nUpload Date: 2017-10-23\nViews: 36' },
+              { name: '📄 Receipt', value: `Use \`/receipt ${xboxAovGt}\` to create a receipt` }
+            );
 
-          embed.setTitle(`Xbox AOV successfully created for ${xboxAovGt}:`)
-               .setDescription(xboxAovScript);
-          await interaction.editReply({ embeds: [embed] });
+          const aovRow = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+              new ButtonBuilder().setCustomId('btn_create_receipt').setLabel('Create Receipt').setStyle(ButtonStyle.Success),
+              new ButtonBuilder().setCustomId('btn_send_xbox').setLabel('Send Xbox Info').setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId('btn_send_epic').setLabel('Send Epic Games Info').setStyle(ButtonStyle.Primary)
+            );
+
+          await interaction.editReply({ embeds: [aovEmbed], components: [aovRow] });
           break;
         case 'iplookup':
           const ip = interaction.options.getString('ip', true);
