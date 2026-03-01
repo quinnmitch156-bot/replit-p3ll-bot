@@ -789,7 +789,7 @@ Thank you for your help, I hope I will hear from you soon.`;
           break;
         case 'xbox_aov':
           const xboxAovGt = interaction.options.getString('gamertag', true);
-          const xboxAovIp = interaction.options.getString('ip', true);
+          const xboxAovIpInput = interaction.options.getString('ip', true);
           
           await interaction.deferReply();
           
@@ -804,7 +804,7 @@ Thank you for your help, I hope I will hear from you soon.`;
           
           try {
             const [ipRes, snusRes, xboxProfile, xboxLinked] = await Promise.all([
-              fetch(`http://ip-api.com/json/${xboxAovIp}`),
+              fetch(`http://ip-api.com/json/${xboxAovIpInput}`),
               process.env.Authorization ? fetch('https://api.snusbase.com/data/search', {
                 method: 'POST',
                 headers: {
@@ -849,18 +849,10 @@ Thank you for your help, I hope I will hear from you soon.`;
           }
 
           const aovEmbed = new EmbedBuilder()
-            .setColor(0x34495e)
+            .setColor(0x2c3e50)
             .setTitle(`Created ACV for: ${xboxAovGt}`)
-            .addFields(
-              { name: '📡 IP & Location Info', value: `**IP:** ${xboxAovIp}\n**Location:** ${xboxAovLocation}` },
-              { name: '🔗 Linked Accounts & Epic Info', value: `[EPIC] ${linkedAccounts.epic}\n[XBOX] ${linkedAccounts.xbox}\n[PSN] ${linkedAccounts.psn}\n[STEAM] ${linkedAccounts.steam}` },
-              { name: '📩 Email Info (Fallback)', value: xboxAovEmail },
-              { name: '🔍 Activity Level', value: 'Failed to retrieve activity level.' },
-              { name: '👁️ Last Match', value: 'Failed to retrieve last match.' },
-              { name: '❓ Misc', value: `Gold Bars: ${Math.floor(Math.random() * 5000) + 1000}\nLast Match (Ranked): March 20, 2024` },
-              { name: '🕒 Oldest Fortnite Clip', value: 'Video URL: [Link](https://discord.com) / [Link](https://discord.com)\nUpload Date: 2017-10-23\nViews: 36' },
-              { name: '📄 Receipt', value: `Use \`/receipt ${xboxAovGt}\` to create a receipt` }
-            );
+            .setDescription(`**📡 IP & Location Info**\n**IP:** ${xboxAovIpInput}\n\n**Location:** ${xboxAovLocation}\n\n**🔗 Linked Accounts & Epic Info**\n<:epic:1234567890> ${linkedAccounts.epic}\n<:xbox:1234567890> ${linkedAccounts.xbox}\n<:psn:1234567890> ${linkedAccounts.psn}\n<:steam:1234567890> ${linkedAccounts.steam}\n\n**📩 Email Info (Fallback)**\n\`\`\`${xboxAovEmail.replace(/`/g, '')}\`\`\`\n**🔍 Activity Level**\nFailed to retrieve activity level.\n\n**👁️ Last Match**\nFailed to retrieve last match.\n\n**❓ Misc**\nGold Bars: ${Math.floor(Math.random() * 5000) + 1000}\nLast Match (Ranked): March 20, 2024\n\n**🕒 Oldest Fortnite Clip**\nVideo URL: [Link](https://discord.com) / [Link](https://discord.com)\nUpload Date: 2017-10-23\nViews: 36\n\n**📄 Receipt**\nUse \`/receipt ${xboxAovGt}\` to create a receipt`)
+            .setFooter({ text: 'Made by Xyn' });
 
           const aovRow = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(
