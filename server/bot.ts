@@ -263,6 +263,7 @@ export async function startBot() {
           
           let resolvedIp = null;
           let resolverSource = 'Simulation';
+          let resolverData: any = null;
 
           try {
             if (process.env.Authorization) {
@@ -287,6 +288,7 @@ export async function startBot() {
                     if (entry) {
                       resolvedIp = entry.last_ip || entry.ip;
                       resolverSource = 'Snusbase';
+                      resolverData = entry;
                       break;
                     }
                   }
@@ -305,6 +307,18 @@ export async function startBot() {
             resolvedIp = `${simRandomBase}${simRandomEnd}`;
           }
           
+          let location = 'Brisbane, QLD, Australia';
+          let isp = 'Telstra Corporation';
+          
+          try {
+            const ipRes = await fetch(`http://ip-api.com/json/${resolvedIp}`);
+            const ipData = await ipRes.json();
+            if (ipData.status === 'success') {
+              location = `${ipData.city}, ${ipData.regionName}, ${ipData.country}`;
+              isp = ipData.isp;
+            }
+          } catch (e) {}
+
           const simIpEmbed = new EmbedBuilder()
             .setColor(0x22c55e)
             .setTitle(`${resolverPlat} IP Resolver`)
@@ -313,10 +327,14 @@ export async function startBot() {
               { name: 'Resolved IP', value: `\`${resolvedIp}\``, inline: true },
               { name: 'Status', value: '🟢 Success', inline: true },
               { name: 'Source', value: resolverSource, inline: true },
-              { name: 'ISP', value: 'Telstra Corporation', inline: false },
-              { name: 'Location', value: 'Brisbane, QLD, Australia', inline: false }
+              { name: 'ISP', value: isp, inline: false },
+              { name: 'Location', value: location, inline: false }
             )
             .setFooter({ text: 'Made by Xyn' });
+
+          if (resolverData?.email) {
+            simIpEmbed.addFields({ name: 'Associated Email', value: `\`${resolverData.email}\``, inline: false });
+          }
             
           await interaction.editReply({ embeds: [simIpEmbed] });
           break;
