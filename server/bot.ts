@@ -107,7 +107,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('check-access')
     .setDescription('Check if a member has access to the bot')
-    .addUserOption(option => option.setName('user').setDescription('The user to check').setRequired(false)),
+    .addUserOption(option => option.setName('member').setDescription('The member to check').setRequired(true)),
   new SlashCommandBuilder()
     .setName('revoke')
     .setDescription('Revoke a member\'s access (Owner only)')
@@ -324,7 +324,7 @@ export async function startBot() {
           // Handled above for non-subscription check
           break;
         case 'check-access':
-          const targetCheck = interaction.options.getUser('user') || interaction.user;
+          const targetCheck = interaction.options.getUser('member', true);
           const dbCheckUser = await storage.getUserByDiscordId(targetCheck.id);
           
           await interaction.client.application.fetch();
@@ -338,20 +338,13 @@ export async function startBot() {
           const isMonthly = dbCheckUser?.subscriptionTier === 'monthly' && dbCheckUser.subscriptionExpiresAt && new Date(dbCheckUser.subscriptionExpiresAt) > new Date();
           
           const hasFullAccess = isTargetOwner || hasTargetAccessRole || isLifetime || isMonthly;
+          const tierDisplay = dbCheckUser?.subscriptionTier ? dbCheckUser.subscriptionTier.charAt(0).toUpperCase() + dbCheckUser.subscriptionTier.slice(1) : 'No';
 
-          const checkEmbed = new EmbedBuilder()
-            .setColor(hasFullAccess ? 0x22c55e : 0xff0000)
-            .setTitle(`Access Check: ${targetCheck.username}`)
-            .setThumbnail(targetCheck.displayAvatarURL())
-            .addFields(
-              { name: 'Status', value: hasFullAccess ? '✅ **Active Access**' : '❌ **No Access**', inline: false },
-              { name: 'Tier', value: dbCheckUser?.subscriptionTier?.toUpperCase() || 'NONE', inline: true },
-              { name: 'Expires', value: dbCheckUser?.subscriptionExpiresAt ? new Date(dbCheckUser.subscriptionExpiresAt).toLocaleDateString() : 'N/A', inline: true },
-              { name: 'Bypass (Owner/Role)', value: (isTargetOwner || hasTargetAccessRole) ? 'Yes' : 'No', inline: true }
-            )
-            .setFooter({ text: 'Galaxy Bot Access Management' });
+          const accessMessage = hasFullAccess 
+            ? `<@${targetCheck.id}> has ${tierDisplay.toLowerCase()} access to the bot`
+            : `<@${targetCheck.id}> has not have access to the bot`;
 
-          await interaction.reply({ embeds: [checkEmbed] });
+          await interaction.reply({ content: accessMessage });
           break;
         case 'help':
           embed.setTitle('Galaxy Bot - Command List')
