@@ -105,6 +105,10 @@ const commands = [
     .setName('buy')
     .setDescription('Buy a product to get access to galaxy!'),
   new SlashCommandBuilder()
+    .setName('check-access')
+    .setDescription('Check if a member has access to the bot')
+    .addUserOption(option => option.setName('user').setDescription('The user to check').setRequired(false)),
+  new SlashCommandBuilder()
     .setName('revoke')
     .setDescription('Revoke a member\'s access (Owner only)')
     .addUserOption(option => option.setName('user').setDescription('The user to revoke access from').setRequired(true)),
@@ -316,11 +320,45 @@ export async function startBot() {
             
           await interaction.editReply({ embeds: [simIpEmbed] });
           break;
+        case 'buy':
+          // Handled above for non-subscription check
+          break;
+        case 'check-access':
+          const targetCheck = interaction.options.getUser('user') || interaction.user;
+          const dbCheckUser = await storage.getUserByDiscordId(targetCheck.id);
+          
+          await interaction.client.application.fetch();
+          const isTargetOwner = (targetCheck.id === interaction.client.application.owner?.id) || 
+                                (process.env.OWNER_ID && targetCheck.id === process.env.OWNER_ID);
+          
+          const targetMember = interaction.guild?.members.cache.get(targetCheck.id);
+          const hasTargetAccessRole = process.env.BOT_ACCESS_ROLE_ID && targetMember?.roles.cache.has(process.env.BOT_ACCESS_ROLE_ID);
+
+          const isLifetime = dbCheckUser?.subscriptionTier === 'lifetime';
+          const isMonthly = dbCheckUser?.subscriptionTier === 'monthly' && dbCheckUser.subscriptionExpiresAt && new Date(dbCheckUser.subscriptionExpiresAt) > new Date();
+          
+          const hasFullAccess = isTargetOwner || hasTargetAccessRole || isLifetime || isMonthly;
+
+          const checkEmbed = new EmbedBuilder()
+            .setColor(hasFullAccess ? 0x22c55e : 0xff0000)
+            .setTitle(`Access Check: ${targetCheck.username}`)
+            .setThumbnail(targetCheck.displayAvatarURL())
+            .addFields(
+              { name: 'Status', value: hasFullAccess ? '✅ **Active Access**' : '❌ **No Access**', inline: false },
+              { name: 'Tier', value: dbCheckUser?.subscriptionTier?.toUpperCase() || 'NONE', inline: true },
+              { name: 'Expires', value: dbCheckUser?.subscriptionExpiresAt ? new Date(dbCheckUser.subscriptionExpiresAt).toLocaleDateString() : 'N/A', inline: true },
+              { name: 'Bypass (Owner/Role)', value: (isTargetOwner || hasTargetAccessRole) ? 'Yes' : 'No', inline: true }
+            )
+            .setFooter({ text: 'Galaxy Bot Access Management' });
+
+          await interaction.reply({ embeds: [checkEmbed] });
+          break;
         case 'help':
           embed.setTitle('Galaxy Bot - Command List')
             .setDescription('Here are all the commands available in Galaxy Bot:')
             .addFields(
               { name: '/check_xbox [gt]', value: 'Get detailed Xbox profile info' },
+              { name: '/check-access [user]', value: 'Check if a member has access to the bot' },
               { name: '/locate [gt]', value: 'Get potential account locations' },
               { name: '/xbox_ip [gt]', value: 'Resolve Xbox gamertag to IP' },
               { name: '/psn_ip [id]', value: 'Resolve PSN ID to IP' },
