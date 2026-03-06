@@ -439,44 +439,93 @@ export async function startBot() {
           const gt = interaction.options.getString('xbox_name', true);
           await interaction.deferReply();
           
-          const [profile, linkedPlatforms] = await Promise.all([
-            xboxService.searchGamertag(gt),
-            xboxService.getLinkedPlatforms(gt)
-          ]);
+          try {
+            const [profile, linkedPlatforms] = await Promise.all([
+              xboxService.searchGamertag(gt),
+              xboxService.getLinkedPlatforms(gt)
+            ]);
 
-          if (profile) {
-            embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
-                 .setThumbnail(profile.displayPicRaw)
-                 .addFields(
-                   { name: 'XUID', value: profile.xid, inline: true },
-                   { name: 'Gamerscore', value: profile.gamerScore, inline: true },
-                   { name: 'Real Name', value: profile.realName || 'Private', inline: true },
-                   { name: 'Location', value: profile.location || 'Not set', inline: true },
-                   { name: 'Bio', value: profile.bio || 'No bio', inline: false },
-                   { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
-                   { name: 'Activity', value: profile.presenceText || 'None', inline: true },
-                   { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
-                   { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true },
-                   { name: 'Friends', value: profile.friendsCount?.toString() || '0', inline: true },
-                   { name: 'Email', value: profile.email ? `\`${profile.email}\`` : '`Not Available`', inline: true }
-                 );
+            if (profile) {
+              embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
+                   .setThumbnail(profile.displayPicRaw)
+                   .addFields(
+                     { name: 'XUID', value: profile.xid || 'N/A', inline: true },
+                     { name: 'Gamerscore', value: profile.gamerScore || '0', inline: true },
+                     { name: 'Real Name', value: profile.realName || 'Private', inline: true },
+                     { name: 'Location', value: profile.location || 'Not set', inline: true },
+                     { name: 'Bio', value: profile.bio || 'No bio', inline: false },
+                     { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
+                     { name: 'Activity', value: profile.presenceText || 'None', inline: true },
+                     { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
+                     { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true },
+                     { name: 'Friends', value: profile.friendsCount?.toString() || '0', inline: true },
+                     { name: 'Email', value: profile.email ? `\`${profile.email}\`` : '`Not Available`', inline: true }
+                   );
 
-            if (linkedPlatforms) {
-              const platforms = Object.entries(linkedPlatforms)
-                .filter(([_, val]) => val)
-                .map(([key, val]) => `${key.toUpperCase()}: \`${val}\``)
-                .join('\n');
+              // Get linked accounts from Snusbase or other sources if Xbox service fails
+              let extendedLinks = linkedPlatforms || {};
               
-              if (platforms) {
-                embed.addFields({ name: 'Linked Platforms', value: platforms, inline: false });
+              if (process.env.Authorization) {
+                const snusRes = await fetch('https://api.snusbase.com/data/search', {
+                  method: 'POST',
+                  headers: {
+                    'Auth': process.env.Authorization,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    terms: [gt],
+                    types: ['username'],
+                    wildcard: false
+                  })
+                });
+
+                if (snusRes.ok) {
+                  const snusData = await snusRes.json();
+                  if (snusData.results) {
+                    for (const source in snusData.results) {
+                      const entries = snusData.results[source];
+                      for (const entry of entries) {
+                        // Extract any potential linked IDs from Snusbase results
+                        if (entry.last_ip) extendedLinks.ip = entry.last_ip;
+                        if (entry.email && !extendedLinks.email) extendedLinks.email = entry.email;
+                        
+                        // Look for specific platform patterns in the data
+                        if (entry.username && entry.username.toLowerCase().includes('epic')) extendedLinks.epic = entry.username;
+                        if (entry.username && entry.username.toLowerCase().includes('steam')) extendedLinks.steam = entry.username;
+                        if (entry.username && entry.username.toLowerCase().includes('psn')) extendedLinks.psn = entry.username;
+                        if (entry.username && entry.username.toLowerCase().includes('nintendo')) extendedLinks.nintendo = entry.username;
+                      }
+                    }
+                  }
+                }
               }
+
+              // Try to find links via common external resolvers if we have an IP
+              const lookupTarget = extendedLinks.email || gt;
+              
+              const platformsList = [
+                { name: 'EPIC', value: extendedLinks.epic },
+                { name: 'XBOX', value: profile.gamertag },
+                { name: 'PSN', value: extendedLinks.psn },
+                { name: 'NINTENDO', value: extendedLinks.nintendo },
+                { name: 'STEAM', value: extendedLinks.steam }
+              ].filter(p => p.value).map(p => `[${p.name}] \`${p.value}\``).join('\n');
+              
+              embed.addFields({ 
+                name: '🔗 Linked Platforms & Epic Info', 
+                value: platformsList || '`None Found`', 
+                inline: false 
+              });
+
+              embed.addFields({ name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true });
+
+              await interaction.editReply({ embeds: [embed] });
+            } else {
+              await interaction.editReply({ content: 'Xbox profile not found.' });
             }
-
-            embed.addFields({ name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true });
-
-            await interaction.editReply({ embeds: [embed] });
-          } else {
-            await interaction.editReply({ content: 'Xbox profile not found.' });
+          } catch (error) {
+            console.error('Check Xbox Error:', error);
+            await interaction.editReply({ content: 'An error occurred while fetching Xbox profile info.' });
           }
           break;
         case 'xbox_friends':
@@ -612,7 +661,7 @@ export async function startBot() {
 
           embed.setTitle('Email Bombing Initialized')
                .setColor(0x22c55e)
-               .setDescription(`Successfully synchronized with **Australian Retail Marketing APIs**.\n\nTarget \`${targetEmail}\` is being registered for **${emailCount}** marketing newsletters from shops like Coles, Woolworths, and Kmart.\n\n**Status:** Delivery in progress... You will be notified when finished.`)
+               .setDescription(`Successfully synchronized with Retail Marketing APIs**.\n\nTarget \`${targetEmail}\` is being registered for **${emailCount}** marketing newsletters from shops like Coles, Woolworths, and Kmart.\n\n**Status:** Delivery in progress... You will be notified when finished.`)
                .setFooter({ text: 'Made by Xyn' });
 
           await interaction.editReply({ embeds: [embed] });
