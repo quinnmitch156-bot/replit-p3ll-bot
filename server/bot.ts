@@ -284,9 +284,11 @@ export async function startBot() {
                 const snusData = await snusRes.json();
                 if (snusData.results) {
                   for (const source in snusData.results) {
-                    const entry = snusData.results[source].find((r: any) => r.last_ip || r.ip);
+                    const entries = snusData.results[source];
+                    // Search for any field that looks like an IP, expanded search
+                    const entry = entries.find((r: any) => r.last_ip || r.ip || r.lastip || r.address || r.ip_address || r.last_login_ip);
                     if (entry) {
-                      resolvedIp = entry.last_ip || entry.ip;
+                      resolvedIp = entry.last_ip || entry.ip || entry.lastip || entry.address || entry.ip_address || entry.last_login_ip;
                       resolverSource = 'Snusbase';
                       resolverData = entry;
                       break;
@@ -307,8 +309,8 @@ export async function startBot() {
             resolvedIp = `${simRandomBase}${simRandomEnd}`;
           }
           
-          let location = 'Brisbane, QLD, Australia';
-          let isp = 'Telstra Corporation';
+          let location = 'Unknown';
+          let isp = 'Unknown';
           
           try {
             const ipRes = await fetch(`http://ip-api.com/json/${resolvedIp}`);
@@ -505,8 +507,8 @@ export async function startBot() {
               
               // Linked Platforms & Epic Info
               const platforms = [
-                { name: 'EPIC', value: extendedLinks.epic },
                 { name: 'XBOX', value: profile.gamertag },
+                { name: 'EPIC', value: extendedLinks.epic },
                 { name: 'PSN', value: extendedLinks.psn },
                 { name: 'NINTENDO', value: extendedLinks.nintendo },
                 { name: 'STEAM', value: extendedLinks.steam }
@@ -524,7 +526,55 @@ export async function startBot() {
 
               await interaction.editReply({ embeds: [embed] });
             } else {
-              await interaction.editReply({ content: 'Xbox profile not found.' });
+              // Fallback to searching Snusbase if Xbox profile search fails
+              let snusResolved = false;
+              if (process.env.Authorization) {
+                try {
+                  const snusRes = await fetch('https://api.snusbase.com/data/search', {
+                    method: 'POST',
+                    headers: {
+                      'Auth': process.env.Authorization,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      terms: [gt],
+                      types: ['username'],
+                      wildcard: false
+                    })
+                  });
+
+                  if (snusRes.ok) {
+                    const snusData = await snusRes.json();
+                    if (snusData.results) {
+                      for (const source in snusData.results) {
+                        const entries = snusData.results[source];
+                        if (entries && entries.length > 0) {
+                          const entry = entries[0];
+                          embed.setTitle(`Xbox Profile (Snusbase): ${gt}`)
+                               .addFields(
+                                 { name: 'XBOX', value: `\`${entry.username || gt}\``, inline: true },
+                                 { name: 'EPIC', value: entry.epic ? `\`${entry.epic}\`` : '`Not Linked`', inline: true },
+                                 { name: 'PSN', value: entry.psn ? `\`${entry.psn}\`` : '`Not Linked`', inline: true },
+                                 { name: 'NINTENDO', value: entry.nintendo ? `\`${entry.nintendo}\`` : '`Not Linked`', inline: true },
+                                 { name: 'STEAM', value: entry.steam ? `\`${entry.steam}\`` : '`Not Linked`', inline: true },
+                                 { name: 'Email', value: entry.email ? `\`${entry.email}\`` : '`Not Found`', inline: false }
+                               );
+                          snusResolved = true;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error('Snusbase Fallback Error:', e);
+                }
+              }
+
+              if (snusResolved) {
+                await interaction.editReply({ embeds: [embed] });
+              } else {
+                await interaction.editReply({ content: 'Xbox profile not found.' });
+              }
             }
           } catch (error) {
             console.error('Check Xbox Error:', error);
