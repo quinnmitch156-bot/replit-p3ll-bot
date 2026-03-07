@@ -503,18 +503,21 @@ export async function startBot() {
               // Try to find links via common external resolvers if we have an IP
               const lookupTarget = extendedLinks.email || gt;
               
-              const platformsList = [
+              // Linked Platforms & Epic Info
+              const platforms = [
                 { name: 'EPIC', value: extendedLinks.epic },
                 { name: 'XBOX', value: profile.gamertag },
                 { name: 'PSN', value: extendedLinks.psn },
                 { name: 'NINTENDO', value: extendedLinks.nintendo },
                 { name: 'STEAM', value: extendedLinks.steam }
-              ].filter(p => p.value).map(p => `[${p.name}] \`${p.value}\``).join('\n');
-              
-              embed.addFields({ 
-                name: '🔗 Linked Platforms & Epic Info', 
-                value: platformsList || '`None Found`', 
-                inline: false 
+              ];
+
+              platforms.forEach(p => {
+                embed.addFields({ 
+                  name: p.name, 
+                  value: p.value ? `\`${p.value}\`` : '`Not Linked`', 
+                  inline: true 
+                });
               });
 
               embed.addFields({ name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true });
