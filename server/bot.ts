@@ -442,32 +442,25 @@ export async function startBot() {
           await interaction.deferReply();
           
           try {
-            const [profile, linkedPlatforms] = await Promise.all([
-              xboxService.searchGamertag(gt),
-              xboxService.getLinkedPlatforms(gt)
-            ]);
+            const profile = await xboxService.searchGamertag(gt);
+            let extendedLinks: any = {};
 
-            if (profile) {
-              embed.setTitle(`Xbox Profile Found: ${profile.gamertag}`)
-                   .setThumbnail(profile.displayPicRaw)
-                   .addFields(
-                     { name: 'XUID', value: profile.xid || 'N/A', inline: true },
-                     { name: 'Gamerscore', value: profile.gamerScore || '0', inline: true },
-                     { name: 'Real Name', value: profile.realName || 'Private', inline: true },
-                     { name: 'Location', value: profile.location || 'Not set', inline: true },
-                     { name: 'Bio', value: profile.bio || 'No bio', inline: false },
-                     { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
-                     { name: 'Activity', value: profile.presenceText || 'None', inline: true },
-                     { name: 'Last Seen', value: profile.lastSeen ? new Date(profile.lastSeen).toLocaleString() : 'Unknown', inline: true },
-                     { name: 'Following', value: profile.followingCount?.toString() || '0', inline: true },
-                     { name: 'Friends', value: profile.friendsCount?.toString() || '0', inline: true },
-                     { name: 'Email', value: profile.email ? `\`${profile.email}\`` : '`Not Available`', inline: true }
-                   );
+            // Primary: ProSwapper API for linked platforms
+            try {
+              const proRes = await fetch(`https://api.proswapper.xyz/v1/user/${encodeURIComponent(gt)}`);
+              if (proRes.ok) {
+                const proData = await proRes.json();
+                if (proData.linked_platforms) {
+                  extendedLinks = { ...extendedLinks, ...proData.linked_platforms };
+                }
+              }
+            } catch (e) {
+              console.error('ProSwapper API Error:', e);
+            }
 
-              // Get linked accounts from Snusbase or other sources if Xbox service fails
-              let extendedLinks = linkedPlatforms || {};
-              
-              if (process.env.Authorization) {
+            // Secondary: Snusbase for additional links and email
+            if (process.env.Authorization) {
+              try {
                 const snusRes = await fetch('https://api.snusbase.com/data/search', {
                   method: 'POST',
                   headers: {
@@ -485,29 +478,39 @@ export async function startBot() {
                   const snusData = await snusRes.json();
                   if (snusData.results) {
                     for (const source in snusData.results) {
-                      const entries = snusData.results[source];
-                      for (const entry of entries) {
-                        // Extract any potential linked IDs from Snusbase results
-                        if (entry.last_ip) extendedLinks.ip = entry.last_ip;
-                        if (entry.email && !extendedLinks.email) extendedLinks.email = entry.email;
-                        
-                        // Look for specific platform patterns in the data
-                        if (entry.username && entry.username.toLowerCase().includes('epic')) extendedLinks.epic = entry.username;
-                        if (entry.username && entry.username.toLowerCase().includes('steam')) extendedLinks.steam = entry.username;
-                        if (entry.username && entry.username.toLowerCase().includes('psn')) extendedLinks.psn = entry.username;
-                        if (entry.username && entry.username.toLowerCase().includes('nintendo')) extendedLinks.nintendo = entry.username;
+                      for (const entry of snusData.results[source]) {
+                        if (entry.email) extendedLinks.email = entry.email;
+                        if (entry.steam_id || entry.steamid) extendedLinks.steam = entry.steam_id || entry.steamid;
+                        if (entry.psn_id) extendedLinks.psn = entry.psn_id;
+                        if (entry.epic_id) extendedLinks.epic = entry.epic_id;
                       }
                     }
                   }
                 }
+              } catch (e) {
+                console.error('Snusbase API Error:', e);
+              }
+            }
+
+            if (profile || extendedLinks.email || extendedLinks.steam) {
+              const title = profile ? `Xbox Profile Found: ${profile.gamertag}` : `Profile Search: ${gt}`;
+              embed.setTitle(title);
+              
+              if (profile) {
+                embed.setThumbnail(profile.displayPicRaw)
+                     .addFields(
+                       { name: 'XUID', value: profile.xid || 'N/A', inline: true },
+                       { name: 'Gamerscore', value: profile.gamerScore || '0', inline: true },
+                       { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
+                       { name: 'Activity', value: profile.presenceText || 'None', inline: true },
+                       { name: 'Email', value: profile.email || extendedLinks.email || 'Not Found', inline: true }
+                     );
+              } else {
+                embed.addFields({ name: 'Email', value: extendedLinks.email || 'Not Found', inline: true });
               }
 
-              // Try to find links via common external resolvers if we have an IP
-              const lookupTarget = extendedLinks.email || gt;
-              
-              // Linked Platforms & Epic Info
               const platforms = [
-                { name: 'XBOX', value: profile.gamertag },
+                { name: 'XBOX', value: profile?.gamertag || gt },
                 { name: 'EPIC', value: extendedLinks.epic },
                 { name: 'PSN', value: extendedLinks.psn },
                 { name: 'NINTENDO', value: extendedLinks.nintendo },
@@ -522,63 +525,13 @@ export async function startBot() {
                 });
               });
 
-              embed.addFields({ name: 'Preferred Location', value: profile.lastPurchaseLocation || '`Not Available`', inline: true });
-
               await interaction.editReply({ embeds: [embed] });
             } else {
-              // Fallback to searching Snusbase if Xbox profile search fails
-              let snusResolved = false;
-              if (process.env.Authorization) {
-                try {
-                  const snusRes = await fetch('https://api.snusbase.com/data/search', {
-                    method: 'POST',
-                    headers: {
-                      'Auth': process.env.Authorization,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      terms: [gt],
-                      types: ['username'],
-                      wildcard: false
-                    })
-                  });
-
-                  if (snusRes.ok) {
-                    const snusData = await snusRes.json();
-                    if (snusData.results) {
-                      for (const source in snusData.results) {
-                        const entries = snusData.results[source];
-                        if (entries && entries.length > 0) {
-                          const entry = entries[0];
-                          embed.setTitle(`Xbox Profile (Snusbase): ${gt}`)
-                               .addFields(
-                                 { name: 'XBOX', value: `\`${entry.username || gt}\``, inline: true },
-                                 { name: 'EPIC', value: entry.epic ? `\`${entry.epic}\`` : '`Not Linked`', inline: true },
-                                 { name: 'PSN', value: entry.psn ? `\`${entry.psn}\`` : '`Not Linked`', inline: true },
-                                 { name: 'NINTENDO', value: entry.nintendo ? `\`${entry.nintendo}\`` : '`Not Linked`', inline: true },
-                                 { name: 'STEAM', value: entry.steam ? `\`${entry.steam}\`` : '`Not Linked`', inline: true },
-                                 { name: 'Email', value: entry.email ? `\`${entry.email}\`` : '`Not Found`', inline: false }
-                               );
-                          snusResolved = true;
-                          break;
-                        }
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.error('Snusbase Fallback Error:', e);
-                }
-              }
-
-              if (snusResolved) {
-                await interaction.editReply({ embeds: [embed] });
-              } else {
-                await interaction.editReply({ content: 'Xbox profile not found.' });
-              }
+              await interaction.editReply({ content: 'No profile information found for this gamertag.' });
             }
           } catch (error) {
             console.error('Check Xbox Error:', error);
-            await interaction.editReply({ content: 'An error occurred while fetching Xbox profile info.' });
+            await interaction.editReply({ content: 'An error occurred while processing the search.' });
           }
           break;
         case 'xbox_friends':
