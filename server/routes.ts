@@ -140,8 +140,8 @@ export async function registerRoutes(
     const code = req.params.code.toUpperCase();
     const genCode = await storage.getGenCode(code);
 
-    if (!genCode) return res.status(404).json({ error: 'Invalid code', valid: false });
-    if (genCode.used) return res.status(400).json({ error: 'Code already used', valid: false, used_by: genCode.usedBy });
+    if (!genCode) return res.type('text/plain').send('❌ Invalid code. Make sure you typed it correctly.');
+    if (genCode.used) return res.type('text/plain').send('❌ This code has already been used.');
 
     // Mark used with requester info (Discord ID or IP)
     const usedBy = (req.query.discord_id as string) || req.ip || 'botghost';
@@ -186,15 +186,8 @@ export async function registerRoutes(
       } catch (_) {}
     }
 
-    // Return both structured JSON and a ready-made message field
-    res.json({
-      valid: true,
-      code,
-      username,
-      ip,
-      email,
-      message: `🎮 **Name Gen Result**\n🎯 Username: \`${username}\`\n🌐 IP: \`${ip}\`\n📧 Email: \`${email}\``
-    });
+    // Return plain text so BotGhost can use {result.response} directly — no conditions needed
+    res.type('text/plain').send(`🎮 Name Gen Result\n🎯 Username: ${username}\n🌐 IP: ${ip}\n📧 Email: ${email}`);
   });
 
   app.get(api.users.get.path, async (req, res) => {
