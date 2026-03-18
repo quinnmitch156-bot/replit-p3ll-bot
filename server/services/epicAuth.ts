@@ -129,8 +129,9 @@ export async function getEpicAccessToken(): Promise<string | null> {
 
   // Priority 3: Static EPIC_AUTH bearer (expires ~8h, manual)
   if (process.env.EPIC_AUTH) {
+    const staticToken = process.env.EPIC_AUTH.replace(/^["'\s]+|["'\s]+$/g, '');
     console.log('[EpicAuth] Using static EPIC_AUTH token');
-    return process.env.EPIC_AUTH;
+    return staticToken;
   }
 
   return null;
