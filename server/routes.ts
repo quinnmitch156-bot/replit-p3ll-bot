@@ -120,6 +120,7 @@ export async function registerRoutes(
   });
 
   // Gen Code admin — generates a new one-time code
+  // Returns plain text so BotGhost can use {gencode} directly in messages
   // BotGhost: POST /api/gen-code?key=YOUR_API_KEY
   app.post('/api/gen-code', async (req, res) => {
     if (!checkKey(req, res)) return;
@@ -127,7 +128,8 @@ export async function registerRoutes(
     let code = '';
     for (let i = 0; i < 10; i++) code += chars[Math.floor(Math.random() * chars.length)];
     await storage.createGenCode(code);
-    res.json({ code, message: `Code generated. User runs /name-gen with code: ${code}` });
+    // Return plain text — BotGhost saves this as the variable value directly
+    res.type('text/plain').send(code);
   });
 
   // Name Gen — validates code, returns generated Fortnite username + Snusbase IP lookup
@@ -183,7 +185,15 @@ export async function registerRoutes(
       } catch (_) {}
     }
 
-    res.json({ valid: true, code, username, ip, email });
+    // Return both structured JSON and a ready-made message field
+    res.json({
+      valid: true,
+      code,
+      username,
+      ip,
+      email,
+      message: `🎮 **Name Gen Result**\n🎯 Username: \`${username}\`\n🌐 IP: \`${ip}\`\n📧 Email: \`${email}\``
+    });
   });
 
   app.get(api.users.get.path, async (req, res) => {
