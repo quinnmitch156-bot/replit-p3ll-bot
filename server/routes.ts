@@ -119,6 +119,73 @@ export async function registerRoutes(
     res.status(epicRes.status).json(data);
   });
 
+  // Gen Code admin — generates a new one-time code
+  // BotGhost: POST /api/gen-code?key=YOUR_API_KEY
+  app.post('/api/gen-code', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 10; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    await storage.createGenCode(code);
+    res.json({ code, message: `Code generated. User runs /name-gen with code: ${code}` });
+  });
+
+  // Name Gen — validates code, returns generated Fortnite username + Snusbase IP lookup
+  // BotGhost: GET /api/name-gen/{code}?key=YOUR_API_KEY
+  app.get('/api/name-gen/:code', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const code = req.params.code.toUpperCase();
+    const genCode = await storage.getGenCode(code);
+
+    if (!genCode) return res.status(404).json({ error: 'Invalid code', valid: false });
+    if (genCode.used) return res.status(400).json({ error: 'Code already used', valid: false, used_by: genCode.usedBy });
+
+    // Mark used with requester info (Discord ID or IP)
+    const usedBy = (req.query.discord_id as string) || req.ip || 'botghost';
+    await storage.markGenCodeUsed(code, usedBy);
+
+    // Generate random Fortnite-style username
+    const prefixes = ['OG', 'FN', 'Pro', 'Elite', 'Dark', 'Ghost', 'Shadow', 'Nova', 'Apex', 'Void', 'Storm', 'Neon', 'Toxic', 'Rogue', 'Slayer'];
+    const suffixes = ['XD', 'YT', 'TTV', '4K', 'GOD', 'GG', 'FPS', 'V2', 'PRO', '360', 'BTW', 'LOL', 'OG'];
+    const names = ['Sniper', 'Builder', 'Rusher', 'Sweat', 'Tryhard', 'Frag', 'Clutch', 'Ace', 'King', 'Legend', 'Ninja', 'Viper', 'Phantom', 'Wraith', 'Reaper'];
+    const rand = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    const num = Math.floor(Math.random() * 9000) + 1000;
+    const formats = [
+      `${rand(prefixes)}_${rand(names)}`,
+      `${rand(names)}${rand(suffixes)}`,
+      `x${rand(names)}x`,
+      `${rand(prefixes)}${rand(names)}${num}`,
+      `ii${rand(names)}ii`,
+      `${rand(names)}_${rand(suffixes)}`,
+      `${rand(prefixes)}_${num}`,
+    ];
+    const username = formats[Math.floor(Math.random() * formats.length)];
+
+    // Snusbase OSINT lookup for IP/email
+    let ip = 'Not found';
+    let email = 'Not found';
+    if (process.env.Authorization) {
+      try {
+        const snusRes = await fetch('https://api.snusbase.com/data/search', {
+          method: 'POST',
+          headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms: [username], types: ['username'], wildcard: false })
+        });
+        if (snusRes.ok) {
+          const snusData = await snusRes.json();
+          for (const source in (snusData.results || {})) {
+            for (const entry of snusData.results[source]) {
+              if ((entry.ip || entry.lastip) && ip === 'Not found') ip = entry.ip || entry.lastip;
+              if (entry.email && email === 'Not found') email = entry.email;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    res.json({ valid: true, code, username, ip, email });
+  });
+
   app.get(api.users.get.path, async (req, res) => {
     const discordId = req.params.discordId as string;
     let user = await storage.getUserByDiscordId(discordId);
