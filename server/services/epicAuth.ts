@@ -1,10 +1,11 @@
 // Epic Games OAuth service with Device Auth auto-refresh
 // Device Auth never expires — gets fresh access tokens automatically 24/7
 
-// Fortnite iOS client credentials (public, well-known)
-const EPIC_CLIENT_ID = '3446cd72694c4a4485d81b77adbb2141';
-const EPIC_CLIENT_SECRET = '9209d4a5e25a457fb9b07489d313b41a';
+// Epic Games Launcher client (active, widely supported)
+const EPIC_CLIENT_ID = '34a02cf8f4414e29b15921876da36f9a';
+const EPIC_CLIENT_SECRET = 'daafbccc737745039dffe53d94fc76cf';
 const BASIC_AUTH = Buffer.from(`${EPIC_CLIENT_ID}:${EPIC_CLIENT_SECRET}`).toString('base64');
+export { BASIC_AUTH };
 
 const TOKEN_URL = 'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token';
 
