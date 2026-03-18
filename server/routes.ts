@@ -5,6 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { startBot } from "./bot";
 import { randomBytes } from "crypto";
+import { getEpicAccessToken } from "./services/epicAuth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -69,6 +70,20 @@ export async function registerRoutes(
     } catch (err) {
        res.status(400).json({ message: "Error redeeming key" });
     }
+  });
+
+  // Epic token endpoint — BotGhost calls this to always get a fresh valid token
+  // Protect with TOKEN_API_KEY secret to prevent public access
+  app.get('/api/epic-token', async (req, res) => {
+    const apiKey = process.env.TOKEN_API_KEY;
+    if (apiKey && req.headers['x-api-key'] !== apiKey) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const token = await getEpicAccessToken();
+    if (!token) {
+      return res.status(503).json({ error: 'Epic auth not configured' });
+    }
+    res.json({ access_token: token, type: 'Bearer' });
   });
 
   app.get(api.users.get.path, async (req, res) => {
