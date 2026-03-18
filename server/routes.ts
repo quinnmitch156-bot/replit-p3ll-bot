@@ -72,18 +72,51 @@ export async function registerRoutes(
     }
   });
 
-  // Epic token endpoint — BotGhost calls this to always get a fresh valid token
-  // Protect with TOKEN_API_KEY secret to prevent public access
-  app.get('/api/epic-token', async (req, res) => {
+  // Helper: check API key
+  function checkKey(req: any, res: any): boolean {
     const apiKey = process.env.TOKEN_API_KEY;
-    if (apiKey && req.headers['x-api-key'] !== apiKey) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (apiKey && req.headers['x-api-key'] !== apiKey && req.query.key !== apiKey) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return false;
     }
+    return true;
+  }
+
+  // Return the current raw access token (for advanced use)
+  app.get('/api/epic-token', async (req, res) => {
+    if (!checkKey(req, res)) return;
     const token = await getEpicAccessToken();
-    if (!token) {
-      return res.status(503).json({ error: 'Epic auth not configured' });
-    }
+    if (!token) return res.status(503).json({ error: 'Epic auth not configured' });
     res.json({ access_token: token, type: 'Bearer' });
+  });
+
+  // Proxy: look up Epic account linked to an Xbox gamertag
+  // BotGhost URL: /api/epic/xbl/{gamertag}?key=YOUR_API_KEY
+  app.get('/api/epic/xbl/:gamertag', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const token = await getEpicAccessToken();
+    if (!token) return res.status(503).json({ error: 'Epic auth not configured' });
+    const gt = encodeURIComponent(req.params.gamertag);
+    const epicRes = await fetch(
+      `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup/externalAuth/xbl/displayName/${gt}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const data = await epicRes.json();
+    res.status(epicRes.status).json(data);
+  });
+
+  // Proxy: look up Epic account by display name
+  // BotGhost URL: /api/epic/lookup/{username}?key=YOUR_API_KEY
+  app.get('/api/epic/lookup/:username', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const token = await getEpicAccessToken();
+    if (!token) return res.status(503).json({ error: 'Epic auth not configured' });
+    const epicRes = await fetch(
+      `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(req.params.username)}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const data = await epicRes.json();
+    res.status(epicRes.status).json(data);
   });
 
   app.get(api.users.get.path, async (req, res) => {
