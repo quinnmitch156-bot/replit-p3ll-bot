@@ -22,6 +22,18 @@ export const keys = pgTable("keys", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const genCodes = pgTable("gen_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").unique().notNull(),
+  used: boolean("used").default(false),
+  usedBy: text("used_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertGenCodeSchema = createInsertSchema(genCodes).omit({ id: true, createdAt: true, used: true, usedBy: true });
+export type GenCode = typeof genCodes.$inferSelect;
+export type InsertGenCode = z.infer<typeof insertGenCodeSchema>;
+
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),

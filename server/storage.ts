@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, keys, logs, type User, type InsertUser, type Key, type InsertKey, type Log, type InsertLog } from "@shared/schema";
+import { users, keys, logs, genCodes, type User, type InsertUser, type Key, type InsertKey, type Log, type InsertLog, type GenCode } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export interface IStorage {
@@ -14,6 +14,11 @@ export interface IStorage {
   getKey(keyStr: string): Promise<Key | undefined>;
   redeemKey(keyId: number, userId: number): Promise<Key>;
   
+  // Gen code operations
+  createGenCode(code: string): Promise<GenCode>;
+  getGenCode(code: string): Promise<GenCode | undefined>;
+  markGenCodeUsed(code: string, usedBy: string): Promise<GenCode>;
+
   // Log operations
   createLog(log: InsertLog): Promise<Log>;
   
@@ -63,6 +68,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(keys.id, keyId))
       .returning();
     return updatedKey;
+  }
+
+  async createGenCode(code: string): Promise<GenCode> {
+    const [newCode] = await db.insert(genCodes).values({ code }).returning();
+    return newCode;
+  }
+
+  async getGenCode(code: string): Promise<GenCode | undefined> {
+    const [found] = await db.select().from(genCodes).where(eq(genCodes.code, code));
+    return found;
+  }
+
+  async markGenCodeUsed(code: string, usedBy: string): Promise<GenCode> {
+    const [updated] = await db.update(genCodes).set({ used: true, usedBy }).where(eq(genCodes.code, code)).returning();
+    return updated;
   }
 
   async createLog(log: InsertLog): Promise<Log> {

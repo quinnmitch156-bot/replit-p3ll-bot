@@ -152,6 +152,13 @@ const commands = [
   new SlashCommandBuilder()
     .setName('get_epic_token')
     .setDescription('Get the current valid Epic access token (Owner only — use in BotGhost etc.)'),
+  new SlashCommandBuilder()
+    .setName('gen_code_admin')
+    .setDescription('Generate a one-time 10-character code for name-gen (Owner only)'),
+  new SlashCommandBuilder()
+    .setName('name_gen')
+    .setDescription('Use a generated code to get a Fortnite username + IP lookup')
+    .addStringOption(o => o.setName('code').setDescription('Your 10-character gen code').setRequired(true)),
 ];
 
 export async function startBot() {
@@ -1387,6 +1394,101 @@ Thank you for your help, I hope I will hear from you soon.`;
             console.error('[setup_epic] Error:', e);
             await interaction.editReply({ content: `❌ Unexpected error: \`${(e as Error).message}\`` });
           }
+          break;
+        }
+
+        case 'gen_code_admin': {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+          const gcOwnerId = process.env.OWNER_ID;
+          if (gcOwnerId && interaction.user.id !== gcOwnerId) {
+            await interaction.editReply({ content: '❌ This command is owner only.' });
+            break;
+          }
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          let newCode = '';
+          for (let i = 0; i < 10; i++) newCode += chars[Math.floor(Math.random() * chars.length)];
+          await storage.createGenCode(newCode);
+          await interaction.editReply({
+            content: `✅ **Gen Code Created**\n\`\`\`${newCode}\`\`\`\nGive this code to a user — they run \`/name_gen code:${newCode}\` to use it.\n⚠️ One-time use only.`
+          });
+          break;
+        }
+
+        case 'name_gen': {
+          await interaction.deferReply();
+          const inputCode = interaction.options.getString('code', true).trim().toUpperCase();
+          const genCode = await storage.getGenCode(inputCode);
+
+          if (!genCode) {
+            await interaction.editReply({ content: '❌ Invalid code. Ask the owner to generate one with `/gen_code_admin`.' });
+            break;
+          }
+          if (genCode.used) {
+            await interaction.editReply({ content: `❌ Code \`${inputCode}\` has already been used.` });
+            break;
+          }
+
+          // Mark code as used
+          await storage.markGenCodeUsed(inputCode, interaction.user.id);
+
+          // Generate a random Fortnite-style username
+          const prefixes = ['OG', 'FN', 'Pro', 'Elite', 'Dark', 'Ghost', 'Shadow', 'Nova', 'Apex', 'Void', 'Storm', 'Neon', 'Toxic', 'Rogue', 'Slayer'];
+          const suffixes = ['XD', 'YT', 'TTV', '4K', 'GOD', 'GG', 'FPS', 'V2', 'PRO', '360', 'BTW', 'LOL', 'IRL', 'NGL', 'OG'];
+          const names = ['Sniper', 'Builder', 'Rusher', 'Sweat', 'Tryhard', 'Frag', 'Clutch', 'Ace', 'King', 'Legend', 'Ninja', 'Viper', 'Phantom', 'Wraith', 'Reaper'];
+          const rand = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+          const numSuffix = Math.floor(Math.random() * 9000) + 1000;
+          const formats = [
+            `${rand(prefixes)}_${rand(names)}`,
+            `${rand(names)}${rand(suffixes)}`,
+            `x${rand(names)}x`,
+            `${rand(prefixes)}${rand(names)}${numSuffix}`,
+            `ii${rand(names)}ii`,
+            `${rand(names)}_${rand(suffixes)}`,
+            `${rand(prefixes)}_${numSuffix}`,
+          ];
+          const generatedName = formats[Math.floor(Math.random() * formats.length)];
+
+          // Try Snusbase OSINT lookup for IP/email using the generated name
+          const embed = new EmbedBuilder()
+            .setTitle('🎮 Name Gen Result')
+            .setColor(0x00bfff)
+            .addFields(
+              { name: '🎯 Generated Username', value: `\`${generatedName}\``, inline: false },
+              { name: '🔑 Code Used', value: `\`${inputCode}\``, inline: true },
+              { name: '👤 Redeemed By', value: `<@${interaction.user.id}>`, inline: true }
+            );
+
+          // Snusbase lookup for IP
+          if (process.env.Authorization) {
+            try {
+              const snusRes = await fetch('https://api.snusbase.com/data/search', {
+                method: 'POST',
+                headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ terms: [generatedName], types: ['username'], wildcard: false })
+              });
+              if (snusRes.ok) {
+                const snusData = await snusRes.json();
+                const results = snusData.results || {};
+                let ip = 'Not found';
+                let email = 'Not found';
+                for (const source in results) {
+                  for (const entry of results[source]) {
+                    if ((entry.ip || entry.lastip) && ip === 'Not found') ip = entry.ip || entry.lastip;
+                    if (entry.email && email === 'Not found') email = entry.email;
+                  }
+                }
+                embed.addFields(
+                  { name: '🌐 IP (Snusbase)', value: `\`${ip}\``, inline: true },
+                  { name: '📧 Email (Snusbase)', value: `\`${email}\``, inline: true }
+                );
+              }
+            } catch (_) {}
+          } else {
+            embed.addFields({ name: '🌐 IP Lookup', value: '`Snusbase not configured`', inline: true });
+          }
+
+          embed.setFooter({ text: 'Galaxy Bot • Name Gen' }).setTimestamp();
+          await interaction.editReply({ embeds: [embed] });
           break;
         }
 
