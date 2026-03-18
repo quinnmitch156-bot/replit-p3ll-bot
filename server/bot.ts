@@ -149,6 +149,9 @@ const commands = [
     .setName('setup_epic')
     .setDescription('Generate permanent Epic Device Auth from an auth code (Owner only)')
     .addStringOption(option => option.setName('auth_code').setDescription('Auth code from the Epic redirect URL').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('get_epic_token')
+    .setDescription('Get the current valid Epic access token (Owner only — use in BotGhost etc.)'),
 ];
 
 export async function startBot() {
@@ -1383,6 +1386,27 @@ Thank you for your help, I hope I will hear from you soon.`;
             console.error('[setup_epic] Error:', e);
             await interaction.editReply({ content: `❌ Unexpected error: \`${(e as Error).message}\`` });
           }
+          break;
+        }
+
+        case 'get_epic_token': {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+          const tokenOwnerId = process.env.OWNER_ID;
+          if (tokenOwnerId && interaction.user.id !== tokenOwnerId) {
+            await interaction.editReply({ content: '❌ This command is owner only.' });
+            break;
+          }
+          const liveToken = await getEpicAccessToken();
+          if (!liveToken) {
+            await interaction.editReply({ content: '❌ No Epic auth configured. Run `/setup_epic` first.' });
+            break;
+          }
+          await interaction.editReply({
+            content: `✅ **Current Epic Access Token** (valid ~8 hours):\n\`\`\`${liveToken}\`\`\`\n` +
+              `Use this as the \`Authorization: Bearer\` header in BotGhost.\n` +
+              `Example header: \`Bearer ${liveToken}\`\n\n` +
+              `⚠️ This expires in ~8h. Run \`/get_epic_token\` again to get a fresh one.`
+          });
           break;
         }
 
