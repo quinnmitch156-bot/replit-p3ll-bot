@@ -147,7 +147,8 @@ const commands = [
     )),
   new SlashCommandBuilder()
     .setName('setup_epic')
-    .setDescription('Generate permanent Epic Device Auth credentials from your current EPIC_AUTH token (Owner only)'),
+    .setDescription('Generate permanent Epic Device Auth from an auth code (Owner only)')
+    .addStringOption(option => option.setName('auth_code').setDescription('Auth code from the Epic redirect URL').setRequired(true)),
 ];
 
 export async function startBot() {
@@ -1321,56 +1322,62 @@ Thank you for your help, I hope I will hear from you soon.`;
           break;
 
         case 'setup_epic': {
-          // Owner-only: generate permanent Device Auth from current EPIC_AUTH token
           await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const setupOwnerId = process.env.OWNER_ID;
           if (setupOwnerId && interaction.user.id !== setupOwnerId) {
             await interaction.editReply({ content: '❌ This command is owner only.' });
             break;
           }
-          let setupToken = await getEpicAccessToken();
-          if (!setupToken) {
-            await interaction.editReply({ content: '❌ No `EPIC_AUTH` token found in secrets. Add your raw Bearer token (without the word "Bearer") to secrets, then run this command again.' });
-            break;
-          }
-          // Strip "Bearer " prefix if the user accidentally included it
-          setupToken = setupToken.replace(/^Bearer\s+/i, '').trim();
+
+          const authCode = interaction.options.getString('auth_code', true).trim();
+          const basicAuth = Buffer.from('34a02cf8f4414e29b15921876da36f9a:daafbccc737745039dffe53d94fc76cf').toString('base64');
 
           try {
-            // Verify the token and get the account_id
-            const meRes = await fetch(
-              'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/verify',
-              { headers: { 'Authorization': `Bearer ${setupToken}` } }
+            // Step 1: Exchange auth code for access token
+            await interaction.editReply({ content: '🔄 Exchanging auth code for access token...' });
+            const tokenRes = await fetch(
+              'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token',
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Basic ${basicAuth}`,
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `grant_type=authorization_code&code=${encodeURIComponent(authCode)}`
+              }
             );
-            const meText = await meRes.text();
-            console.log(`[setup_epic] verify status=${meRes.status} body=${meText.substring(0, 300)}`);
+            const tokenText = await tokenRes.text();
+            console.log(`[setup_epic] token exchange status=${tokenRes.status} body=${tokenText.substring(0, 300)}`);
 
-            if (!meRes.ok) {
-              let reason = `HTTP ${meRes.status}`;
+            if (!tokenRes.ok) {
+              let reason = `HTTP ${tokenRes.status}`;
               try {
-                const errJson = JSON.parse(meText);
-                reason = errJson.errorMessage || errJson.message || reason;
+                const errJson = JSON.parse(tokenText);
+                reason = errJson.errorMessage || errJson.error_description || errJson.message || reason;
               } catch (_) {}
               await interaction.editReply({
-                content: `❌ Token verification failed: **${reason}**\n\nYour \`EPIC_AUTH\` token is likely expired (they last 8 hours). Get a fresh token and update the secret, then run \`/setup_epic\` again.`
+                content: `❌ Auth code exchange failed: **${reason}**\n\nGet a fresh auth code from:\n\`https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code\`\n\nThen run \`/setup_epic\` again with the new code.`
               });
               break;
             }
 
-            const meData = JSON.parse(meText);
-            const myAccountId = meData.account_id;
-            if (!myAccountId) {
-              await interaction.editReply({ content: `❌ Could not read account_id from token response. Response: \`${meText.substring(0, 200)}\`` });
+            const tokenData = JSON.parse(tokenText);
+            const accessToken = tokenData.access_token;
+            const accountId = tokenData.account_id;
+
+            if (!accessToken || !accountId) {
+              await interaction.editReply({ content: `❌ Token response missing access_token or account_id. Response: \`${tokenText.substring(0, 200)}\`` });
               break;
             }
 
-            // Create the device auth
+            // Step 2: Create Device Auth
+            await interaction.editReply({ content: '🔄 Creating permanent Device Auth...' });
             const deviceAuthRes = await fetch(
-              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${myAccountId}/deviceAuth`,
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${accountId}/deviceAuth`,
               {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${setupToken}`,
+                  'Authorization': `Bearer ${accessToken}`,
                   'Content-Type': 'application/json'
                 }
               }
@@ -1389,16 +1396,17 @@ Thank you for your help, I hope I will hear from you soon.`;
             }
 
             const deviceData = JSON.parse(deviceAuthText);
+
             await interaction.editReply({
-              content: `✅ **Device Auth created successfully!**\n\nAdd these **3 secrets** to your Replit Secrets tab — the bot will then auto-refresh its Epic token permanently:\n\n` +
+              content: `✅ **Done! Permanent Device Auth created.**\n\nAdd these **3 secrets** to your Replit Secrets tab — the bot will auto-refresh its Epic token 24/7 forever:\n\n` +
                 `**EPIC_ACCOUNT_ID**\n\`\`\`${deviceData.accountId}\`\`\`\n` +
                 `**EPIC_DEVICE_ID**\n\`\`\`${deviceData.deviceId}\`\`\`\n` +
                 `**EPIC_DEVICE_SECRET**\n\`\`\`${deviceData.secret}\`\`\`\n\n` +
-                `⚠️ These give permanent access to the Epic account — keep them private.`
+                `⚠️ Keep these private — they give permanent access to the Epic account.`
             });
           } catch (e) {
             console.error('[setup_epic] Error:', e);
-            await interaction.editReply({ content: `❌ An unexpected error occurred: \`${(e as Error).message}\`` });
+            await interaction.editReply({ content: `❌ Unexpected error: \`${(e as Error).message}\`` });
           }
           break;
         }
