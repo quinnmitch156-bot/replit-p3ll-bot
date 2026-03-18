@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, E
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
+import { getEpicAccessToken, createDeviceAuth } from './services/epicAuth';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
 
@@ -144,6 +145,9 @@ const commands = [
       { name: 'Lifetime', value: 'lifetime' },
       { name: 'Monthly', value: 'monthly' }
     )),
+  new SlashCommandBuilder()
+    .setName('setup_epic')
+    .setDescription('Generate permanent Epic Device Auth credentials from your current EPIC_AUTH token (Owner only)'),
 ];
 
 export async function startBot() {
@@ -515,20 +519,21 @@ export async function startBot() {
             }
 
             // Epic Games API — lookup linked Epic account via Xbox display name
-            if (process.env.EPIC_AUTH) {
-              try {
+            try {
+              const epicToken = await getEpicAccessToken();
+              if (epicToken) {
                 const epicRes = await fetch(
                   `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup/externalAuth/xbl/displayName/${encodeURIComponent(gt)}`,
-                  { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+                  { headers: { 'Authorization': `Bearer ${epicToken}` } }
                 );
                 if (epicRes.ok) {
                   const epicData = await epicRes.json();
                   epicLinkedUsername = epicData.displayName || epicData.id || 'Linked (no name)';
                   extendedLinks.epicId = epicData.id;
                 }
-              } catch (e) {
-                console.error('Epic Games API Error:', e);
               }
+            } catch (e) {
+              console.error('Epic Games API Error:', e);
             }
 
             // ProSwapper API for additional platform links
@@ -611,14 +616,15 @@ export async function startBot() {
           const epicUsername = interaction.options.getString('username', true);
           await interaction.deferReply();
           try {
-            if (!process.env.EPIC_AUTH) {
-              await interaction.editReply({ content: 'Epic Games auth token not configured. Add `EPIC_AUTH` to secrets.' });
+            const epicToken = await getEpicAccessToken();
+            if (!epicToken) {
+              await interaction.editReply({ content: 'Epic Games auth not configured. Add `EPIC_AUTH` (or device auth secrets) to secrets.' });
               break;
             }
             // First resolve account ID from display name
             const epicLookupRes = await fetch(
               `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(epicUsername)}`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             if (!epicLookupRes.ok) {
               await interaction.editReply({ content: `Could not find Epic account: **${epicUsername}**` });
@@ -630,7 +636,7 @@ export async function startBot() {
             // Get full account info
             const epicAccountRes = await fetch(
               `https://account-public-service-prod.ol.epicgames.com/account/api/public/account?accountId=${accountId}`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             const epicAccountData = epicAccountRes.ok ? (await epicAccountRes.json())[0] || {} : {};
 
@@ -664,14 +670,15 @@ export async function startBot() {
           const epicFriendsUsername = interaction.options.getString('username', true);
           await interaction.deferReply();
           try {
-            if (!process.env.EPIC_AUTH) {
-              await interaction.editReply({ content: 'Epic Games auth token not configured. Add `EPIC_AUTH` to secrets.' });
+            const epicToken = await getEpicAccessToken();
+            if (!epicToken) {
+              await interaction.editReply({ content: 'Epic Games auth not configured. Add `EPIC_AUTH` (or device auth secrets) to secrets.' });
               break;
             }
             // Resolve account ID
             const lookupRes = await fetch(
               `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(epicFriendsUsername)}`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             if (!lookupRes.ok) {
               await interaction.editReply({ content: `Could not find Epic account: **${epicFriendsUsername}**` });
@@ -683,7 +690,7 @@ export async function startBot() {
             // Get friends list
             const friendsRes = await fetch(
               `https://friends-public-service-prod.ol.epicgames.com/friends/api/public/friends/${accountId}?includePending=false`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             if (!friendsRes.ok) {
               await interaction.editReply({ content: `Could not retrieve friends list. The account may be private.` });
@@ -702,7 +709,7 @@ export async function startBot() {
             const idsQuery = friendIds.map((id: string) => `accountId=${id}`).join('&');
             const namesRes = await fetch(
               `https://account-public-service-prod.ol.epicgames.com/account/api/public/account?${idsQuery}`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             const namesData = namesRes.ok ? await namesRes.json() : [];
             const nameMap: Record<string, string> = {};
@@ -726,14 +733,15 @@ export async function startBot() {
           const statsUsername = interaction.options.getString('username', true);
           await interaction.deferReply();
           try {
-            if (!process.env.EPIC_AUTH) {
-              await interaction.editReply({ content: 'Epic Games auth token not configured. Add `EPIC_AUTH` to secrets.' });
+            const epicToken = await getEpicAccessToken();
+            if (!epicToken) {
+              await interaction.editReply({ content: 'Epic Games auth not configured. Add `EPIC_AUTH` (or device auth secrets) to secrets.' });
               break;
             }
             // Resolve account ID
             const statLookupRes = await fetch(
               `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(statsUsername)}`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             if (!statLookupRes.ok) {
               await interaction.editReply({ content: `Could not find Epic account: **${statsUsername}**` });
@@ -745,7 +753,7 @@ export async function startBot() {
             // Get stats
             const statsRes = await fetch(
               `https://statsproxy-public-service-live.ol.epicgames.com/statsproxy/api/statsv2/account/${statAccountId}`,
-              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+              { headers: { 'Authorization': `Bearer ${epicToken}` } }
             );
             if (!statsRes.ok) {
               await interaction.editReply({ content: `Could not retrieve stats. The account may have private stats.` });
@@ -1311,6 +1319,53 @@ Thank you for your help, I hope I will hear from you soon.`;
           }
           await interaction.reply({ embeds: [embed] });
           break;
+
+        case 'setup_epic': {
+          // Owner-only: generate permanent Device Auth from current EPIC_AUTH token
+          await interaction.deferReply({ ephemeral: true });
+          const setupOwnerId = process.env.OWNER_ID;
+          if (setupOwnerId && interaction.user.id !== setupOwnerId) {
+            await interaction.editReply({ content: 'This command is owner only.' });
+            break;
+          }
+          const setupToken = await getEpicAccessToken();
+          if (!setupToken) {
+            await interaction.editReply({ content: 'No `EPIC_AUTH` token found. Add your Bearer token to secrets first, then run this command to convert it to permanent Device Auth.' });
+            break;
+          }
+          // We need an account ID to create device auth — get it from the token
+          try {
+            const meRes = await fetch(
+              'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/verify',
+              { headers: { 'Authorization': `Bearer ${setupToken}` } }
+            );
+            if (!meRes.ok) {
+              await interaction.editReply({ content: `Token verification failed (${meRes.status}). Your \`EPIC_AUTH\` token may have expired. Get a fresh token and try again.` });
+              break;
+            }
+            const meData = await meRes.json();
+            const myAccountId = meData.account_id;
+
+            const deviceAuth = await createDeviceAuth(setupToken, myAccountId);
+            if (!deviceAuth) {
+              await interaction.editReply({ content: 'Failed to create Device Auth. Make sure your token has full account scope.' });
+              break;
+            }
+
+            await interaction.editReply({
+              content: `✅ **Device Auth created!** Add these 3 values to your Replit Secrets tab and the bot will auto-refresh its Epic token 24/7:\n\n` +
+                `**EPIC_ACCOUNT_ID**\n\`\`\`${deviceAuth.accountId}\`\`\`\n` +
+                `**EPIC_DEVICE_ID**\n\`\`\`${deviceAuth.deviceId}\`\`\`\n` +
+                `**EPIC_DEVICE_SECRET**\n\`\`\`${deviceAuth.secret}\`\`\`\n\n` +
+                `⚠️ Keep these private — they give permanent access to the account.`
+            });
+          } catch (e) {
+            console.error('Setup Epic Error:', e);
+            await interaction.editReply({ content: 'An error occurred generating Device Auth.' });
+          }
+          break;
+        }
+
         default:
           await interaction.reply({ content: 'Unknown command.', ephemeral: false });
       }
