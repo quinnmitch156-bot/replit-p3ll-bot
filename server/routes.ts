@@ -147,47 +147,53 @@ export async function registerRoutes(
     const usedBy = (req.query.discord_id as string) || req.ip || 'botghost';
     await storage.markGenCodeUsed(code, usedBy);
 
-    // Generate random Fortnite-style username
-    const prefixes = ['OG', 'FN', 'Pro', 'Elite', 'Dark', 'Ghost', 'Shadow', 'Nova', 'Apex', 'Void', 'Storm', 'Neon', 'Toxic', 'Rogue', 'Slayer'];
-    const suffixes = ['XD', 'YT', 'TTV', '4K', 'GOD', 'GG', 'FPS', 'V2', 'PRO', '360', 'BTW', 'LOL', 'OG'];
-    const names = ['Sniper', 'Builder', 'Rusher', 'Sweat', 'Tryhard', 'Frag', 'Clutch', 'Ace', 'King', 'Legend', 'Ninja', 'Viper', 'Phantom', 'Wraith', 'Reaper'];
+    // Helpers
     const rand = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-    const num = Math.floor(Math.random() * 9000) + 1000;
-    const formats = [
-      `${rand(prefixes)}_${rand(names)}`,
-      `${rand(names)}${rand(suffixes)}`,
-      `x${rand(names)}x`,
-      `${rand(prefixes)}${rand(names)}${num}`,
-      `ii${rand(names)}ii`,
-      `${rand(names)}_${rand(suffixes)}`,
-      `${rand(prefixes)}_${num}`,
+    const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const randHex = (len: number) => Array.from({ length: len }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    // Generate username
+    const firstParts = ['Norman','Shadow','Ghost','Apex','Rogue','Void','Neon','Storm','Elite','Viper','Wraith','Clutch','Reaper','Phantom','Slayer','Nova','Toxic','Frag','Blaze','Frost','Hyper','Zeta','Omega','Delta','Nexus','Cipher','Flare','Stealth','Chaos','Rebel'];
+    const midParts = ['El','The','_','De','Le','Van','Mac','Pro','OG','x'];
+    const endParts = ['0','1','r0','Pr0','yt','GG','XD','TTV','zz','99','420','lol','vv','ii','oo'];
+    const usernameFormats = [
+      () => `${rand(firstParts)}${rand(endParts)}`,
+      () => `${rand(firstParts)}${rand(midParts)}${rand(firstParts)}`,
+      () => `x${rand(firstParts)}x`,
+      () => `ii${rand(firstParts)}ii`,
+      () => `${rand(firstParts)}_${randInt(10,9999)}`,
+      () => `${rand(firstParts)}${rand(firstParts)}${rand(endParts)}`,
     ];
-    const username = formats[Math.floor(Math.random() * formats.length)];
+    const username = usernameFormats[Math.floor(Math.random() * usernameFormats.length)]();
 
-    // Snusbase OSINT lookup for IP/email
-    let ip = 'Not found';
-    let email = 'Not found';
-    if (process.env.Authorization) {
-      try {
-        const snusRes = await fetch('https://api.snusbase.com/data/search', {
-          method: 'POST',
-          headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ terms: [username], types: ['username'], wildcard: false })
-        });
-        if (snusRes.ok) {
-          const snusData = await snusRes.json();
-          for (const source in (snusData.results || {})) {
-            for (const entry of snusData.results[source]) {
-              if ((entry.ip || entry.lastip) && ip === 'Not found') ip = entry.ip || entry.lastip;
-              if (entry.email && email === 'Not found') email = entry.email;
-            }
-          }
-        }
-      } catch (_) {}
-    }
+    // Account ID (32 char hex like Epic account IDs)
+    const accountId = randHex(32);
 
-    // Return plain text so BotGhost can use {result.response} directly — no conditions needed
-    res.type('text/plain').send(`🎮 Name Gen Result\n🎯 Username: ${username}\n🌐 IP: ${ip}\n📧 Email: ${email}`);
+    // Stats
+    const matches = randInt(400, 8000);
+    const wins = randInt(Math.floor(matches * 0.03), Math.floor(matches * 0.18));
+    const stw = Math.random() > 0.5 ? 'Yes' : 'No';
+    const daysAgo = randInt(1, 730);
+    const lastMatchDate = new Date(Date.now() - daysAgo * 86400000).toISOString().split('T')[0];
+
+    // Cosmetics
+    const allPickaxes = ['Pry Axe','7 Rings Smasher','Axecalibur','Batsickle','Candy Axe','Frostbite','Gale Force','Harley Hitter','Ice Breaker','Merry Mauler','Minty Pickaxe','Neon Scythe','Permafrost','Pickaxe of Champions','Rainbow Smash','Reaper','Skull Sickle','Star Wand','Studded Axe','Trusty No. 2'];
+    const allBackblings = ['Nucleus','Black Shield','Bling Bag','Brite Bag','Camo','Cold Front','Crested Cape','Dark Wings','Hamirez','Glider Wings','Harvester Pack','Journey Bag','Mako','Prospect Pack','Scoundrel Pack','Shield','Slurp Splashback','Star Power','Tech Ops','Trailblazer Pack'];
+    const allEmotes = ['Call me','Poki','Don\'t Start Now','Never Gonna','Skipper','Dance Moves','Evasive Maneuvers','Build Up','Have a Seat','Say So','Clean Sweep','Floss','Orange Justice','Ride The Pony','Robot','Scenario','Swipe It','Take The L','The Worm','Wiggle'];
+
+    const shuffle = (arr: string[]) => [...arr].sort(() => Math.random() - 0.5);
+    const pickaxes = shuffle(allPickaxes).slice(0, randInt(1, 4)).join(', ');
+    const backblings = shuffle(allBackblings).slice(0, randInt(1, 3)).join(', ');
+    const emotes = shuffle(allEmotes).slice(0, randInt(4, 12)).join(', ');
+
+    // Connected accounts
+    const nintendoId = `lp1_${randHex(16)}`;
+    const steamId = `7656119${randInt(1000000000, 9999999999)}`;
+    const connAccs = `(xbl, DisplayName: ${username}), (nintendo, nsa_id: ${nintendoId}), (steam, steam_id64: ${steamId}, DisplayName: ${steamId})`;
+
+    const output = `${username} | Username: ${username} | AccountId: ${accountId} | Matches: ${matches} | Wins: ${wins} | STW: ${stw} | LastMatch: ${lastMatchDate} | Pickaxes: ${pickaxes} | Backblings: ${backblings} | Emotes: ${emotes} | Conn Accs: ${connAccs}`;
+
+    res.type('text/plain').send(output);
   });
 
   app.get(api.users.get.path, async (req, res) => {
