@@ -1330,68 +1330,96 @@ Thank you for your help, I hope I will hear from you soon.`;
           }
 
           const authCode = interaction.options.getString('auth_code', true).trim();
-          // Fortnite PC client — has account:deviceAuths CREATE scope required for device auth
-          const basicAuth = Buffer.from('ec684b8c687f479fadea3cb2ad83f5c6:e1f31c211f28413186262d37a13fc84d').toString('base64');
+          // Step 1: Launcher client for initial auth code exchange (broad web scopes)
+          const launcherBasic = Buffer.from('34a02cf8f4414e29b15921876da36f9a:daafbccc737745039dffe53d94fc76cf').toString('base64');
+          // Step 3: Fortnite PC client for exchange_code re-exchange (grants deviceAuths CREATE scope)
+          const fnBasic = Buffer.from('ec684b8c687f479fadea3cb2ad83f5c6:e1f31c211f28413186262d37a13fc84d').toString('base64');
+          const TOKEN_URL = 'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token';
 
           try {
-            // Step 1: Exchange auth code for access token
-            await interaction.editReply({ content: '🔄 Exchanging auth code for access token...' });
-            const tokenRes = await fetch(
-              'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token',
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Basic ${basicAuth}`,
-                  'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: `grant_type=authorization_code&code=${encodeURIComponent(authCode)}`
-              }
-            );
+            // Step 1: Exchange auth code → initial access token (Launcher client)
+            await interaction.editReply({ content: '🔄 Step 1/3 — Exchanging auth code...' });
+            const tokenRes = await fetch(TOKEN_URL, {
+              method: 'POST',
+              headers: { 'Authorization': `Basic ${launcherBasic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `grant_type=authorization_code&code=${encodeURIComponent(authCode)}`
+            });
             const tokenText = await tokenRes.text();
-            console.log(`[setup_epic] token exchange status=${tokenRes.status} body=${tokenText.substring(0, 300)}`);
+            console.log(`[setup_epic] step1 status=${tokenRes.status} body=${tokenText.substring(0, 300)}`);
 
             if (!tokenRes.ok) {
               let reason = `HTTP ${tokenRes.status}`;
-              try {
-                const errJson = JSON.parse(tokenText);
-                reason = errJson.errorMessage || errJson.error_description || errJson.message || reason;
-              } catch (_) {}
+              try { const e = JSON.parse(tokenText); reason = e.errorMessage || e.error_description || e.message || reason; } catch (_) {}
               await interaction.editReply({
-                content: `❌ Auth code exchange failed: **${reason}**\n\nGet a fresh auth code from:\n\`https://www.epicgames.com/id/api/redirect?clientId=ec684b8c687f479fadea3cb2ad83f5c6&responseType=code\`\n\nThen run \`/setup_epic\` again with the new code.`
+                content: `❌ Auth code exchange failed: **${reason}**\n\nGet a fresh code from:\n\`https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code\`\n\nThen run \`/setup_epic\` again.`
               });
               break;
             }
 
             const tokenData = JSON.parse(tokenText);
-            const accessToken = tokenData.access_token;
+            const initialToken = tokenData.access_token;
             const accountId = tokenData.account_id;
 
-            if (!accessToken || !accountId) {
-              await interaction.editReply({ content: `❌ Token response missing access_token or account_id. Response: \`${tokenText.substring(0, 200)}\`` });
+            if (!initialToken || !accountId) {
+              await interaction.editReply({ content: `❌ Missing access_token/account_id. Response: \`${tokenText.substring(0, 200)}\`` });
               break;
             }
 
-            // Step 2: Create Device Auth
-            await interaction.editReply({ content: '🔄 Creating permanent Device Auth...' });
+            // Step 2: Get an exchange code from the initial token
+            await interaction.editReply({ content: '🔄 Step 2/3 — Promoting token scopes...' });
+            const exchangeRes = await fetch(
+              'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/exchange',
+              { headers: { 'Authorization': `Bearer ${initialToken}` } }
+            );
+            const exchangeText = await exchangeRes.text();
+            console.log(`[setup_epic] step2 status=${exchangeRes.status} body=${exchangeText.substring(0, 300)}`);
+
+            if (!exchangeRes.ok) {
+              let reason = `HTTP ${exchangeRes.status}`;
+              try { const e = JSON.parse(exchangeText); reason = e.errorMessage || e.message || reason; } catch (_) {}
+              await interaction.editReply({ content: `❌ Exchange code fetch failed: **${reason}**` });
+              break;
+            }
+
+            const exchangeCode = JSON.parse(exchangeText).code;
+            if (!exchangeCode) {
+              await interaction.editReply({ content: `❌ No exchange code in response: \`${exchangeText.substring(0, 200)}\`` });
+              break;
+            }
+
+            // Step 3: Re-exchange with Fortnite PC client → token with deviceAuths CREATE scope
+            const fnTokenRes = await fetch(TOKEN_URL, {
+              method: 'POST',
+              headers: { 'Authorization': `Basic ${fnBasic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `grant_type=exchange_code&exchange_code=${encodeURIComponent(exchangeCode)}`
+            });
+            const fnTokenText = await fnTokenRes.text();
+            console.log(`[setup_epic] step3 status=${fnTokenRes.status} body=${fnTokenText.substring(0, 300)}`);
+
+            if (!fnTokenRes.ok) {
+              let reason = `HTTP ${fnTokenRes.status}`;
+              try { const e = JSON.parse(fnTokenText); reason = e.errorMessage || e.message || reason; } catch (_) {}
+              await interaction.editReply({ content: `❌ Fortnite token exchange failed: **${reason}**` });
+              break;
+            }
+
+            const fnToken = JSON.parse(fnTokenText).access_token;
+
+            // Step 4: Create Device Auth with the promoted Fortnite token
+            await interaction.editReply({ content: '🔄 Step 3/3 — Creating permanent Device Auth...' });
             const deviceAuthRes = await fetch(
               `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${accountId}/deviceAuth`,
               {
                 method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json'
-                }
+                headers: { 'Authorization': `Bearer ${fnToken}`, 'Content-Type': 'application/json' }
               }
             );
             const deviceAuthText = await deviceAuthRes.text();
-            console.log(`[setup_epic] deviceAuth status=${deviceAuthRes.status} body=${deviceAuthText.substring(0, 300)}`);
+            console.log(`[setup_epic] step4 status=${deviceAuthRes.status} body=${deviceAuthText.substring(0, 300)}`);
 
             if (!deviceAuthRes.ok) {
               let reason = `HTTP ${deviceAuthRes.status}`;
-              try {
-                const errJson = JSON.parse(deviceAuthText);
-                reason = errJson.errorMessage || errJson.message || reason;
-              } catch (_) {}
+              try { const e = JSON.parse(deviceAuthText); reason = e.errorMessage || e.message || reason; } catch (_) {}
               await interaction.editReply({ content: `❌ Failed to create Device Auth: **${reason}**` });
               break;
             }
