@@ -100,4 +100,12 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  // Gracefully release the port on shutdown so restarts never hit EADDRINUSE
+  const shutdown = () => {
+    httpServer.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 3000);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 })();
