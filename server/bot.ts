@@ -1322,46 +1322,83 @@ Thank you for your help, I hope I will hear from you soon.`;
 
         case 'setup_epic': {
           // Owner-only: generate permanent Device Auth from current EPIC_AUTH token
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const setupOwnerId = process.env.OWNER_ID;
           if (setupOwnerId && interaction.user.id !== setupOwnerId) {
-            await interaction.editReply({ content: 'This command is owner only.' });
+            await interaction.editReply({ content: '❌ This command is owner only.' });
             break;
           }
-          const setupToken = await getEpicAccessToken();
+          let setupToken = await getEpicAccessToken();
           if (!setupToken) {
-            await interaction.editReply({ content: 'No `EPIC_AUTH` token found. Add your Bearer token to secrets first, then run this command to convert it to permanent Device Auth.' });
+            await interaction.editReply({ content: '❌ No `EPIC_AUTH` token found in secrets. Add your raw Bearer token (without the word "Bearer") to secrets, then run this command again.' });
             break;
           }
-          // We need an account ID to create device auth — get it from the token
+          // Strip "Bearer " prefix if the user accidentally included it
+          setupToken = setupToken.replace(/^Bearer\s+/i, '').trim();
+
           try {
+            // Verify the token and get the account_id
             const meRes = await fetch(
               'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/verify',
               { headers: { 'Authorization': `Bearer ${setupToken}` } }
             );
+            const meText = await meRes.text();
+            console.log(`[setup_epic] verify status=${meRes.status} body=${meText.substring(0, 300)}`);
+
             if (!meRes.ok) {
-              await interaction.editReply({ content: `Token verification failed (${meRes.status}). Your \`EPIC_AUTH\` token may have expired. Get a fresh token and try again.` });
+              let reason = `HTTP ${meRes.status}`;
+              try {
+                const errJson = JSON.parse(meText);
+                reason = errJson.errorMessage || errJson.message || reason;
+              } catch (_) {}
+              await interaction.editReply({
+                content: `❌ Token verification failed: **${reason}**\n\nYour \`EPIC_AUTH\` token is likely expired (they last 8 hours). Get a fresh token and update the secret, then run \`/setup_epic\` again.`
+              });
               break;
             }
-            const meData = await meRes.json();
+
+            const meData = JSON.parse(meText);
             const myAccountId = meData.account_id;
-
-            const deviceAuth = await createDeviceAuth(setupToken, myAccountId);
-            if (!deviceAuth) {
-              await interaction.editReply({ content: 'Failed to create Device Auth. Make sure your token has full account scope.' });
+            if (!myAccountId) {
+              await interaction.editReply({ content: `❌ Could not read account_id from token response. Response: \`${meText.substring(0, 200)}\`` });
               break;
             }
 
+            // Create the device auth
+            const deviceAuthRes = await fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${myAccountId}/deviceAuth`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${setupToken}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+            const deviceAuthText = await deviceAuthRes.text();
+            console.log(`[setup_epic] deviceAuth status=${deviceAuthRes.status} body=${deviceAuthText.substring(0, 300)}`);
+
+            if (!deviceAuthRes.ok) {
+              let reason = `HTTP ${deviceAuthRes.status}`;
+              try {
+                const errJson = JSON.parse(deviceAuthText);
+                reason = errJson.errorMessage || errJson.message || reason;
+              } catch (_) {}
+              await interaction.editReply({ content: `❌ Failed to create Device Auth: **${reason}**` });
+              break;
+            }
+
+            const deviceData = JSON.parse(deviceAuthText);
             await interaction.editReply({
-              content: `✅ **Device Auth created!** Add these 3 values to your Replit Secrets tab and the bot will auto-refresh its Epic token 24/7:\n\n` +
-                `**EPIC_ACCOUNT_ID**\n\`\`\`${deviceAuth.accountId}\`\`\`\n` +
-                `**EPIC_DEVICE_ID**\n\`\`\`${deviceAuth.deviceId}\`\`\`\n` +
-                `**EPIC_DEVICE_SECRET**\n\`\`\`${deviceAuth.secret}\`\`\`\n\n` +
-                `⚠️ Keep these private — they give permanent access to the account.`
+              content: `✅ **Device Auth created successfully!**\n\nAdd these **3 secrets** to your Replit Secrets tab — the bot will then auto-refresh its Epic token permanently:\n\n` +
+                `**EPIC_ACCOUNT_ID**\n\`\`\`${deviceData.accountId}\`\`\`\n` +
+                `**EPIC_DEVICE_ID**\n\`\`\`${deviceData.deviceId}\`\`\`\n` +
+                `**EPIC_DEVICE_SECRET**\n\`\`\`${deviceData.secret}\`\`\`\n\n` +
+                `⚠️ These give permanent access to the Epic account — keep them private.`
             });
           } catch (e) {
-            console.error('Setup Epic Error:', e);
-            await interaction.editReply({ content: 'An error occurred generating Device Auth.' });
+            console.error('[setup_epic] Error:', e);
+            await interaction.editReply({ content: `❌ An unexpected error occurred: \`${(e as Error).message}\`` });
           }
           break;
         }
@@ -1389,7 +1426,7 @@ Thank you for your help, I hope I will hear from you soon.`;
       if (interaction.customId === 'select_payment') {
         const paymentMethod = interaction.values[0];
         if (paymentMethod !== 'card' && paymentMethod !== 'paypal') {
-          return interaction.reply({ content: `**${paymentMethod.toUpperCase()}** is currently not available. Coming Soon!`, ephemeral: true });
+          return interaction.reply({ content: `**${paymentMethod.toUpperCase()}** is currently not available. Coming Soon!`, flags: MessageFlags.Ephemeral });
         }
 
         const paymentInstructionsEmbed = new EmbedBuilder()
