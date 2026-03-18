@@ -36,8 +36,32 @@ const commands = [
     .setDescription('Show all available commands'),
   new SlashCommandBuilder()
     .setName('check_xbox')
-    .setDescription('Provides detailed Xbox profile information including linked platforms')
+    .setDescription('Provides detailed Xbox profile info, linked platforms & lookup count via xbl.io')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('epic_lookup')
+    .setDescription('Look up an Epic Games account by username')
+    .addStringOption(option => option.setName('username').setDescription('Epic Games display name').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('epic_friends')
+    .setDescription('Get the friends list of an Epic Games account')
+    .addStringOption(option => option.setName('username').setDescription('Epic Games display name').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('fortnite_stats')
+    .setDescription('Get Fortnite Battle Royale stats for a player')
+    .addStringOption(option => option.setName('username').setDescription('Epic Games display name').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('osint_email')
+    .setDescription('OSINT lookup for an email address via Snusbase')
+    .addStringOption(option => option.setName('email').setDescription('Target email address').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('osint_username')
+    .setDescription('OSINT lookup for a username via Snusbase')
+    .addStringOption(option => option.setName('username').setDescription('Target username').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('osint_ip')
+    .setDescription('OSINT lookup for an IP address via Snusbase')
+    .addStringOption(option => option.setName('ip').setDescription('Target IP address').setRequired(true)),
   new SlashCommandBuilder()
     .setName('iplookup')
     .setDescription('Looks up information about an IP address')
@@ -370,23 +394,34 @@ export async function startBot() {
           embed.setTitle('Galaxy Bot - Command List')
             .setDescription('Here are all the commands available in Galaxy Bot:')
             .addFields(
-              { name: '/check_xbox [gt]', value: 'Get detailed Xbox profile info' },
-              { name: '/check-access [user]', value: 'Check if a member has access to the bot' },
-              { name: '/locate [gt]', value: 'Get potential account locations' },
-              { name: '/xbox_ip [gt]', value: 'Resolve Xbox gamertag to IP' },
-              { name: '/psn_ip [id]', value: 'Resolve PSN ID to IP' },
-              { name: '/xbox_friends [gt]', value: 'List Xbox friends and status' },
-              { name: '/bomb [email] [amount]', value: 'Send marketing emails to a target' },
-              { name: '/xbox_aov [gt] [ip]', value: 'Generate Xbox AOV script' },
-              { name: '/psn_aov [id] [ip]', value: 'Generate PSN AOV script' },
-              { name: '/xbox_vbucks_receipt', value: 'Generate Xbox V-Bucks receipt' },
-              { name: '/psn_vbucks_receipt', value: 'Generate PSN V-Bucks receipt' },
-              { name: '/xbox_stw_receipt', value: 'Generate Xbox STW receipt' },
-              { name: '/psn_stw_receipt', value: 'Generate PSN STW receipt' },
-              { name: '/iplookup [ip]', value: 'Get details about an IP' },
-              { name: '/giveaccess [user] [tier]', value: 'Give a member access (Owner only)' },
-              { name: '/buy', value: 'Purchase bot access' },
-              { name: '/redeem [key]', value: 'Activate your subscription' }
+              { name: '**── Xbox ──**', value: '\u200b' },
+              { name: '/check_xbox [gamertag]', value: 'Full Xbox profile + linked platforms + lookup count', inline: true },
+              { name: '/xbox_ip [gamertag]', value: 'Resolve Xbox gamertag to IP', inline: true },
+              { name: '/xbox_friends [gamertag]', value: 'List Xbox friends and status', inline: true },
+              { name: '/xbox_aov [gamertag] [ip]', value: 'Generate Xbox AOV script', inline: true },
+              { name: '/xbox_vbucks_receipt', value: 'Generate Xbox V-Bucks receipt', inline: true },
+              { name: '/xbox_stw_receipt', value: 'Generate Xbox STW receipt', inline: true },
+              { name: '**── Epic / Fortnite ──**', value: '\u200b' },
+              { name: '/epic_lookup [username]', value: 'Full Epic Games account info + linked platforms', inline: true },
+              { name: '/epic_friends [username]', value: 'Epic Games friends list', inline: true },
+              { name: '/fortnite_stats [username]', value: 'Fortnite BR stats (solo/duo/squad)', inline: true },
+              { name: '**── PSN ──**', value: '\u200b' },
+              { name: '/psn_ip [psn_id]', value: 'Resolve PSN ID to IP', inline: true },
+              { name: '/psn_aov [psn_name] [ip]', value: 'Generate PSN AOV script', inline: true },
+              { name: '/psn_vbucks_receipt', value: 'Generate PSN V-Bucks receipt', inline: true },
+              { name: '/psn_stw_receipt', value: 'Generate PSN STW receipt', inline: true },
+              { name: '**── OSINT ──**', value: '\u200b' },
+              { name: '/osint_email [email]', value: 'Snusbase lookup by email', inline: true },
+              { name: '/osint_username [username]', value: 'Snusbase lookup by username', inline: true },
+              { name: '/osint_ip [ip]', value: 'Snusbase lookup by IP', inline: true },
+              { name: '/iplookup [ip]', value: 'IP geolocation & ISP info', inline: true },
+              { name: '/locate [gamertag]', value: 'Geo-locate an Xbox account', inline: true },
+              { name: '**── Misc ──**', value: '\u200b' },
+              { name: '/bomb [email] [amount]', value: 'Send marketing emails to a target', inline: true },
+              { name: '/check-access [user]', value: 'Check if a member has access', inline: true },
+              { name: '/giveaccess [user] [tier]', value: 'Give a member access (Owner only)', inline: true },
+              { name: '/buy', value: 'Purchase bot access', inline: true },
+              { name: '/redeem [key]', value: 'Activate your subscription', inline: true }
             );
           await interaction.reply({ embeds: [embed] });
           break;
@@ -444,96 +479,381 @@ export async function startBot() {
           try {
             const profile = await xboxService.searchGamertag(gt);
             let extendedLinks: any = {};
+            let xblLookupCount = 'N/A';
+            let epicLinkedUsername = 'Not Linked';
 
-            // Primary: ProSwapper API for linked platforms
-            try {
-              const proRes = await fetch(`https://api.proswapper.xyz/v1/user/${encodeURIComponent(gt)}`);
-              if (proRes.ok) {
-                const proData = await proRes.json();
-                if (proData.linked_platforms) {
-                  extendedLinks = { ...extendedLinks, ...proData.linked_platforms };
+            // xbl.io for lookup count & extra profile data
+            if (process.env.XBL_IO_API_KEY) {
+              try {
+                const xblRes = await fetch(`https://xbl.io/api/v2/search?q=${encodeURIComponent(gt)}`, {
+                  headers: { 'X-Authorization': process.env.XBL_IO_API_KEY, 'Accept': 'application/json' }
+                });
+                if (xblRes.ok) {
+                  const xblData = await xblRes.json();
+                  if (xblData.profileUsers && xblData.profileUsers.length > 0) {
+                    const xblUser = xblData.profileUsers[0];
+                    xblLookupCount = (xblData.totalCount ?? xblUser.lookupCount ?? 'N/A').toString();
+                    const xblXuid = xblUser.id;
+                    // Fetch history/lookups count from profile endpoint
+                    try {
+                      const xblProfileRes = await fetch(`https://xbl.io/api/v2/account/${xblXuid}`, {
+                        headers: { 'X-Authorization': process.env.XBL_IO_API_KEY, 'Accept': 'application/json' }
+                      });
+                      if (xblProfileRes.ok) {
+                        const xblProfileData = await xblProfileRes.json();
+                        if (xblProfileData.profileUsers?.[0]) {
+                          const lookups = xblProfileData.profileUsers[0].lookupCount ?? xblProfileData.totalCount;
+                          if (lookups !== undefined) xblLookupCount = lookups.toString();
+                        }
+                      }
+                    } catch (e) {}
+                  }
                 }
+              } catch (e) {
+                console.error('xbl.io Error:', e);
               }
-            } catch (e) {
-              console.error('ProSwapper API Error:', e);
             }
 
-            // Secondary: Snusbase for additional links and email
+            // Epic Games API — lookup linked Epic account via Xbox display name
+            if (process.env.EPIC_AUTH) {
+              try {
+                const epicRes = await fetch(
+                  `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup/externalAuth/xbl/displayName/${encodeURIComponent(gt)}`,
+                  { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+                );
+                if (epicRes.ok) {
+                  const epicData = await epicRes.json();
+                  epicLinkedUsername = epicData.displayName || epicData.id || 'Linked (no name)';
+                  extendedLinks.epicId = epicData.id;
+                }
+              } catch (e) {
+                console.error('Epic Games API Error:', e);
+              }
+            }
+
+            // ProSwapper API for additional platform links
+            try {
+              const proRes = await fetch(`https://api.proswapper.xyz/v1/user/${encodeURIComponent(gt)}`, {
+                signal: AbortSignal.timeout(5000)
+              });
+              if (proRes.ok) {
+                const proData = await proRes.json();
+                if (proData.linked_platforms) extendedLinks = { ...extendedLinks, ...proData.linked_platforms };
+              }
+            } catch (e) {}
+
+            // Snusbase for email, steam_id, psn_id
             if (process.env.Authorization) {
               try {
                 const snusRes = await fetch('https://api.snusbase.com/data/search', {
                   method: 'POST',
-                  headers: {
-                    'Auth': process.env.Authorization,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    terms: [gt],
-                    types: ['username'],
-                    wildcard: false
-                  })
+                  headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ terms: [gt], types: ['username'], wildcard: false })
                 });
-
                 if (snusRes.ok) {
                   const snusData = await snusRes.json();
                   if (snusData.results) {
                     for (const source in snusData.results) {
                       for (const entry of snusData.results[source]) {
-                        if (entry.email) extendedLinks.email = entry.email;
-                        if (entry.steam_id || entry.steamid) extendedLinks.steam = entry.steam_id || entry.steamid;
-                        if (entry.psn_id) extendedLinks.psn = entry.psn_id;
-                        if (entry.epic_id) extendedLinks.epic = entry.epic_id;
+                        if (entry.email && !extendedLinks.email) extendedLinks.email = entry.email;
+                        if ((entry.steam_id || entry.steamid) && !extendedLinks.steam) extendedLinks.steam = entry.steam_id || entry.steamid;
+                        if (entry.psn_id && !extendedLinks.psn) extendedLinks.psn = entry.psn_id;
                       }
                     }
                   }
                 }
-              } catch (e) {
-                console.error('Snusbase API Error:', e);
-              }
+              } catch (e) {}
             }
 
-            if (profile || extendedLinks.email || extendedLinks.steam) {
-              const title = profile ? `Xbox Profile Found: ${profile.gamertag}` : `Profile Search: ${gt}`;
-              embed.setTitle(title);
-              
+            if (profile || extendedLinks.email) {
+              embed.setTitle(`Xbox Profile: ${profile?.gamertag || gt}`);
+              if (profile?.displayPicRaw) embed.setThumbnail(profile.displayPicRaw);
+
               if (profile) {
-                embed.setThumbnail(profile.displayPicRaw)
-                     .addFields(
-                       { name: 'XUID', value: profile.xid || 'N/A', inline: true },
-                       { name: 'Gamerscore', value: profile.gamerScore || '0', inline: true },
-                       { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
-                       { name: 'Activity', value: profile.presenceText || 'None', inline: true },
-                       { name: 'Email', value: profile.email || extendedLinks.email || 'Not Found', inline: true }
-                     );
+                embed.addFields(
+                  { name: 'XUID', value: profile.xid || 'N/A', inline: true },
+                  { name: 'Gamerscore', value: profile.gamerScore || '0', inline: true },
+                  { name: 'Status', value: profile.presenceState || 'Offline', inline: true },
+                  { name: 'Activity', value: profile.presenceText || 'None', inline: true },
+                  { name: 'Email', value: `\`${profile.email || extendedLinks.email || 'Not Found'}\``, inline: true },
+                  { name: 'Lookups', value: xblLookupCount, inline: true }
+                );
               } else {
-                embed.addFields({ name: 'Email', value: extendedLinks.email || 'Not Found', inline: true });
+                embed.addFields(
+                  { name: 'Email', value: `\`${extendedLinks.email || 'Not Found'}\``, inline: true },
+                  { name: 'Lookups', value: xblLookupCount, inline: true }
+                );
               }
 
+              // Platform links
               const platforms = [
                 { name: 'XBOX', value: profile?.gamertag || gt },
-                { name: 'EPIC', value: extendedLinks.epic },
+                { name: 'EPIC', value: epicLinkedUsername !== 'Not Linked' ? epicLinkedUsername : extendedLinks.epic },
                 { name: 'PSN', value: extendedLinks.psn },
                 { name: 'NINTENDO', value: extendedLinks.nintendo },
                 { name: 'STEAM', value: extendedLinks.steam }
               ];
-
               platforms.forEach(p => {
-                embed.addFields({ 
-                  name: p.name, 
-                  value: p.value ? `\`${p.value}\`` : '`Not Linked`', 
-                  inline: true 
-                });
+                embed.addFields({ name: p.name, value: p.value ? `\`${p.value}\`` : '`Not Linked`', inline: true });
               });
 
               await interaction.editReply({ embeds: [embed] });
             } else {
-              await interaction.editReply({ content: 'No profile information found for this gamertag.' });
+              await interaction.editReply({ content: `No profile found for **${gt}**.` });
             }
           } catch (error) {
             console.error('Check Xbox Error:', error);
             await interaction.editReply({ content: 'An error occurred while processing the search.' });
           }
           break;
+
+        case 'epic_lookup': {
+          const epicUsername = interaction.options.getString('username', true);
+          await interaction.deferReply();
+          try {
+            if (!process.env.EPIC_AUTH) {
+              await interaction.editReply({ content: 'Epic Games auth token not configured. Add `EPIC_AUTH` to secrets.' });
+              break;
+            }
+            // First resolve account ID from display name
+            const epicLookupRes = await fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(epicUsername)}`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            if (!epicLookupRes.ok) {
+              await interaction.editReply({ content: `Could not find Epic account: **${epicUsername}**` });
+              break;
+            }
+            const epicLookupData = await epicLookupRes.json();
+            const accountId = epicLookupData.id;
+
+            // Get full account info
+            const epicAccountRes = await fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account?accountId=${accountId}`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            const epicAccountData = epicAccountRes.ok ? (await epicAccountRes.json())[0] || {} : {};
+
+            embed.setTitle(`Epic Games Account: ${epicUsername}`)
+                 .addFields(
+                   { name: 'Account ID', value: `\`${accountId}\``, inline: false },
+                   { name: 'Display Name', value: epicLookupData.displayName || epicUsername, inline: true },
+                   { name: 'Email', value: epicAccountData.email ? `\`${epicAccountData.email}\`` : '`Not Available`', inline: true },
+                   { name: 'Created', value: epicAccountData.createdAt ? new Date(epicAccountData.createdAt).toLocaleDateString() : 'Unknown', inline: true },
+                   { name: 'Country', value: epicAccountData.country || 'Unknown', inline: true },
+                   { name: 'Name', value: epicAccountData.name ? `${epicAccountData.name} ${epicAccountData.lastName || ''}`.trim() : 'Private', inline: true },
+                   { name: 'Preferred Language', value: epicAccountData.preferredLanguage || 'Unknown', inline: true }
+                 );
+
+            // External auths (linked platforms)
+            const extAuths = epicAccountData.externalAuths || {};
+            const linkedPlatforms = Object.entries(extAuths).map(([platform, data]: [string, any]) => {
+              return `**${platform.toUpperCase()}**: \`${data.externalDisplayName || data.externalId || 'Linked'}\``;
+            }).join('\n') || 'None';
+            embed.addFields({ name: 'Linked Platforms', value: linkedPlatforms, inline: false });
+
+            await interaction.editReply({ embeds: [embed] });
+          } catch (error) {
+            console.error('Epic Lookup Error:', error);
+            await interaction.editReply({ content: 'An error occurred during Epic Games lookup.' });
+          }
+          break;
+        }
+
+        case 'epic_friends': {
+          const epicFriendsUsername = interaction.options.getString('username', true);
+          await interaction.deferReply();
+          try {
+            if (!process.env.EPIC_AUTH) {
+              await interaction.editReply({ content: 'Epic Games auth token not configured. Add `EPIC_AUTH` to secrets.' });
+              break;
+            }
+            // Resolve account ID
+            const lookupRes = await fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(epicFriendsUsername)}`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            if (!lookupRes.ok) {
+              await interaction.editReply({ content: `Could not find Epic account: **${epicFriendsUsername}**` });
+              break;
+            }
+            const lookupData = await lookupRes.json();
+            const accountId = lookupData.id;
+
+            // Get friends list
+            const friendsRes = await fetch(
+              `https://friends-public-service-prod.ol.epicgames.com/friends/api/public/friends/${accountId}?includePending=false`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            if (!friendsRes.ok) {
+              await interaction.editReply({ content: `Could not retrieve friends list. The account may be private.` });
+              break;
+            }
+            const friendsData = await friendsRes.json();
+
+            if (!friendsData || friendsData.length === 0) {
+              embed.setTitle(`Epic Friends: ${epicFriendsUsername}`).setDescription('No friends found or list is private.');
+              await interaction.editReply({ embeds: [embed] });
+              break;
+            }
+
+            // Batch resolve display names (max 100 at a time)
+            const friendIds = friendsData.slice(0, 50).map((f: any) => f.accountId);
+            const idsQuery = friendIds.map((id: string) => `accountId=${id}`).join('&');
+            const namesRes = await fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account?${idsQuery}`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            const namesData = namesRes.ok ? await namesRes.json() : [];
+            const nameMap: Record<string, string> = {};
+            for (const acc of namesData) nameMap[acc.id] = acc.displayName || acc.id;
+
+            const friendList = friendIds.map((id: string) => `• \`${nameMap[id] || id}\``).join('\n');
+            const totalCount = friendsData.length;
+
+            embed.setTitle(`Epic Friends: ${epicFriendsUsername}`)
+                 .setDescription(`**Total Friends:** ${totalCount}\n\n${friendList}${totalCount > 50 ? `\n*...and ${totalCount - 50} more*` : ''}`)
+                 .setFooter({ text: 'Made by Xyn' });
+            await interaction.editReply({ embeds: [embed] });
+          } catch (error) {
+            console.error('Epic Friends Error:', error);
+            await interaction.editReply({ content: 'An error occurred fetching Epic friends.' });
+          }
+          break;
+        }
+
+        case 'fortnite_stats': {
+          const statsUsername = interaction.options.getString('username', true);
+          await interaction.deferReply();
+          try {
+            if (!process.env.EPIC_AUTH) {
+              await interaction.editReply({ content: 'Epic Games auth token not configured. Add `EPIC_AUTH` to secrets.' });
+              break;
+            }
+            // Resolve account ID
+            const statLookupRes = await fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup?displayName=${encodeURIComponent(statsUsername)}`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            if (!statLookupRes.ok) {
+              await interaction.editReply({ content: `Could not find Epic account: **${statsUsername}**` });
+              break;
+            }
+            const statLookupData = await statLookupRes.json();
+            const statAccountId = statLookupData.id;
+
+            // Get stats
+            const statsRes = await fetch(
+              `https://statsproxy-public-service-live.ol.epicgames.com/statsproxy/api/statsv2/account/${statAccountId}`,
+              { headers: { 'Authorization': `Bearer ${process.env.EPIC_AUTH}` } }
+            );
+            if (!statsRes.ok) {
+              await interaction.editReply({ content: `Could not retrieve stats. The account may have private stats.` });
+              break;
+            }
+            const statsData = await statsRes.json();
+            const stats = statsData.stats || {};
+
+            const getStat = (key: string) => (stats[key] ?? 0).toString();
+
+            embed.setTitle(`Fortnite Stats: ${statsUsername}`)
+                 .addFields(
+                   { name: 'Wins (Solo)', value: getStat('br_wins_keyboardmouse_m0_p2'), inline: true },
+                   { name: 'Wins (Duo)', value: getStat('br_wins_keyboardmouse_m0_p10'), inline: true },
+                   { name: 'Wins (Squad)', value: getStat('br_wins_keyboardmouse_m0_p9'), inline: true },
+                   { name: 'Matches (Solo)', value: getStat('br_matchesplayed_keyboardmouse_m0_p2'), inline: true },
+                   { name: 'Matches (Duo)', value: getStat('br_matchesplayed_keyboardmouse_m0_p10'), inline: true },
+                   { name: 'Matches (Squad)', value: getStat('br_matchesplayed_keyboardmouse_m0_p9'), inline: true },
+                   { name: 'Kills (Solo)', value: getStat('br_kills_keyboardmouse_m0_p2'), inline: true },
+                   { name: 'Kills (Duo)', value: getStat('br_kills_keyboardmouse_m0_p10'), inline: true },
+                   { name: 'Kills (Squad)', value: getStat('br_kills_keyboardmouse_m0_p9'), inline: true },
+                   { name: 'Account ID', value: `\`${statAccountId}\``, inline: false }
+                 )
+                 .setFooter({ text: 'Made by Xyn' });
+            await interaction.editReply({ embeds: [embed] });
+          } catch (error) {
+            console.error('Fortnite Stats Error:', error);
+            await interaction.editReply({ content: 'An error occurred fetching Fortnite stats.' });
+          }
+          break;
+        }
+
+        case 'osint_email':
+        case 'osint_username':
+        case 'osint_ip': {
+          const osintTerm = interaction.options.getString('email', false) 
+                          || interaction.options.getString('username', false) 
+                          || interaction.options.getString('ip', true);
+          const osintType = interaction.commandName === 'osint_email' ? 'email' 
+                          : interaction.commandName === 'osint_username' ? 'username' : 'ip';
+          await interaction.deferReply();
+
+          if (!process.env.Authorization) {
+            await interaction.editReply({ content: 'Snusbase API key not configured. Add `Authorization` to secrets.' });
+            break;
+          }
+
+          try {
+            const osintRes = await fetch('https://api.snusbase.com/data/search', {
+              method: 'POST',
+              headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ terms: [osintTerm], types: [osintType], wildcard: false })
+            });
+
+            if (!osintRes.ok) {
+              await interaction.editReply({ content: `Snusbase API returned an error: ${osintRes.status}` });
+              break;
+            }
+
+            const osintData = await osintRes.json();
+            const results = osintData.results || {};
+            const sourceKeys = Object.keys(results);
+
+            if (sourceKeys.length === 0) {
+              embed.setTitle(`OSINT: ${osintTerm}`).setDescription('No results found in any database.');
+              await interaction.editReply({ embeds: [embed] });
+              break;
+            }
+
+            let totalHits = 0;
+            const fields: { name: string; value: string; inline: boolean }[] = [];
+
+            for (const source of sourceKeys) {
+              const entries = results[source] || [];
+              totalHits += entries.length;
+              if (fields.length >= 20) continue;
+
+              for (const entry of entries.slice(0, 3)) {
+                const details = [
+                  entry.email && `Email: \`${entry.email}\``,
+                  entry.username && `Username: \`${entry.username}\``,
+                  entry.password && `Password: \`${entry.password}\``,
+                  entry.hash && `Hash: \`${entry.hash.substring(0, 32)}...\``,
+                  entry.name && `Name: \`${entry.name}\``,
+                  entry.last_ip && `IP: \`${entry.last_ip}\``,
+                  entry.phone && `Phone: \`${entry.phone}\``,
+                  entry.address && `Address: \`${entry.address}\``
+                ].filter(Boolean).join('\n');
+
+                if (details) {
+                  fields.push({ name: source.split('.')[0].toUpperCase(), value: details, inline: true });
+                }
+              }
+            }
+
+            embed.setTitle(`OSINT Results: ${osintTerm}`)
+                 .setDescription(`**Type:** ${osintType} | **Total Hits:** ${totalHits} | **Sources:** ${sourceKeys.length}`)
+                 .addFields(fields.slice(0, 25))
+                 .setFooter({ text: 'Made by Xyn | Powered by Snusbase' });
+
+            await interaction.editReply({ embeds: [embed] });
+          } catch (error) {
+            console.error('OSINT Error:', error);
+            await interaction.editReply({ content: 'An error occurred during OSINT lookup.' });
+          }
+          break;
+        }
+
         case 'xbox_friends':
           const friendsGt = interaction.options.getString('xbox_name', true);
           await interaction.deferReply({ flags: [] });
