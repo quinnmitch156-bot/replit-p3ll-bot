@@ -1370,8 +1370,9 @@ Thank you for your help, I hope I will hear from you soon.`;
               break;
             }
 
-            // Store refresh token in memory so the bot auto-refreshes immediately
+            // Store refresh token in memory and on disk so it survives restarts
             process.env.EPIC_REFRESH_TOKEN = refreshToken;
+            try { require('fs').writeFileSync('.epic_refresh_token', refreshToken, 'utf8'); } catch (_) {}
 
             const expiryDays = typeof expiresIn === 'number' ? Math.round(expiresIn / 86400) : 30;
 

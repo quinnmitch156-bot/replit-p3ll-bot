@@ -2,6 +2,8 @@
 // Flow: refresh_token → Launcher access token → exchange_code → Fortnite PC JWT (eg1~...)
 // The Fortnite PC JWT is required for game service endpoints (externalAuths, stats, friends, etc.)
 
+import { readFileSync, writeFileSync } from 'fs';
+
 const LAUNCHER_ID = '34a02cf8f4414e29b15921876da36f9a';
 const LAUNCHER_SECRET = 'daafbccc737745039dffe53d94fc76cf';
 const LAUNCHER_BASIC = Buffer.from(`${LAUNCHER_ID}:${LAUNCHER_SECRET}`).toString('base64');
@@ -15,6 +17,23 @@ export { LAUNCHER_BASIC as BASIC_AUTH };
 
 const TOKEN_URL = 'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token';
 const EXCHANGE_URL = 'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/exchange';
+const REFRESH_TOKEN_FILE = '.epic_refresh_token';
+
+// Persist the latest refresh token to disk so restarts always have the newest one
+function saveRefreshToken(token: string) {
+  try {
+    writeFileSync(REFRESH_TOKEN_FILE, token, 'utf8');
+  } catch (_) {}
+}
+
+// Read the most up-to-date refresh token: disk file takes priority over secret
+function getStoredRefreshToken(): string | null {
+  try {
+    const fromFile = readFileSync(REFRESH_TOKEN_FILE, 'utf8').trim();
+    if (fromFile) return fromFile;
+  } catch (_) {}
+  return process.env.EPIC_REFRESH_TOKEN || null;
+}
 
 let cachedToken: string | null = null;
 let tokenExpiresAt: number = 0;
@@ -60,7 +79,7 @@ export async function getEpicAccessToken(): Promise<string | null> {
   }
 
   // Priority 1: refresh_token flow → Launcher token → Fortnite JWT
-  const refreshToken = process.env.EPIC_REFRESH_TOKEN;
+  const refreshToken = getStoredRefreshToken();
   if (refreshToken) {
     try {
       const res = await fetch(TOKEN_URL, {
@@ -73,10 +92,10 @@ export async function getEpicAccessToken(): Promise<string | null> {
         const data = await res.json();
         const launcherToken = data.access_token;
 
-        // Rotate stored refresh token if Epic issued a new one
-        if (data.refresh_token && data.refresh_token !== refreshToken) {
+        // Always save the latest refresh token to disk — Epic rotates them
+        if (data.refresh_token) {
+          saveRefreshToken(data.refresh_token);
           process.env.EPIC_REFRESH_TOKEN = data.refresh_token;
-          console.log('[EpicAuth] Refresh token rotated — update EPIC_REFRESH_TOKEN secret:', data.refresh_token);
         }
 
         // Promote to Fortnite PC JWT for full API access
