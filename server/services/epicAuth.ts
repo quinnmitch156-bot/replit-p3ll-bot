@@ -1,9 +1,9 @@
 // Epic Games OAuth service with Device Auth auto-refresh
 // Device Auth never expires — gets fresh access tokens automatically 24/7
 
-// Epic Games Launcher client (active, widely supported)
-const EPIC_CLIENT_ID = '34a02cf8f4414e29b15921876da36f9a';
-const EPIC_CLIENT_SECRET = 'daafbccc737745039dffe53d94fc76cf';
+// Fortnite PC client — required for device_auth grant (has account:deviceAuths CREATE scope)
+const EPIC_CLIENT_ID = 'ec684b8c687f479fadea3cb2ad83f5c6';
+const EPIC_CLIENT_SECRET = 'e1f31c211f28413186262d37a13fc84d';
 const BASIC_AUTH = Buffer.from(`${EPIC_CLIENT_ID}:${EPIC_CLIENT_SECRET}`).toString('base64');
 export { BASIC_AUTH };
 

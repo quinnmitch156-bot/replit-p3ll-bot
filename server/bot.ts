@@ -1330,7 +1330,8 @@ Thank you for your help, I hope I will hear from you soon.`;
           }
 
           const authCode = interaction.options.getString('auth_code', true).trim();
-          const basicAuth = Buffer.from('34a02cf8f4414e29b15921876da36f9a:daafbccc737745039dffe53d94fc76cf').toString('base64');
+          // Fortnite PC client — has account:deviceAuths CREATE scope required for device auth
+          const basicAuth = Buffer.from('ec684b8c687f479fadea3cb2ad83f5c6:e1f31c211f28413186262d37a13fc84d').toString('base64');
 
           try {
             // Step 1: Exchange auth code for access token
@@ -1356,7 +1357,7 @@ Thank you for your help, I hope I will hear from you soon.`;
                 reason = errJson.errorMessage || errJson.error_description || errJson.message || reason;
               } catch (_) {}
               await interaction.editReply({
-                content: `❌ Auth code exchange failed: **${reason}**\n\nGet a fresh auth code from:\n\`https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code\`\n\nThen run \`/setup_epic\` again with the new code.`
+                content: `❌ Auth code exchange failed: **${reason}**\n\nGet a fresh auth code from:\n\`https://www.epicgames.com/id/api/redirect?clientId=ec684b8c687f479fadea3cb2ad83f5c6&responseType=code\`\n\nThen run \`/setup_epic\` again with the new code.`
               });
               break;
             }
