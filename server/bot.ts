@@ -98,6 +98,11 @@ const commands = [
     .setDescription('Get The IP Address from an Xbox Gamertag')
     .addStringOption(option => option.setName('gamertag').setDescription('Gamertag').setRequired(true)),
   new SlashCommandBuilder()
+    .setName('submit_ip')
+    .setDescription('Submit a gamertag → IP pair to the Galaxy resolver database')
+    .addStringOption(option => option.setName('gamertag').setDescription('Xbox Gamertag').setRequired(true))
+    .addStringOption(option => option.setName('ip').setDescription('IP Address (e.g. 81.100.180.171)').setRequired(true)),
+  new SlashCommandBuilder()
     .setName('xbox_stw_receipt')
     .setDescription('Generates a Xbox receipt for STW')
     .addStringOption(option => option.setName('date').setDescription('Date').setRequired(true))
@@ -1145,23 +1150,31 @@ export async function startBot() {
             }
           ];
 
-          let resolvedIpValue = null;
+          let resolvedIpValue: string | null = null;
+          let resolvedSource = 'Multi-Resolver Network';
           const typeResolver = interaction.commandName === 'xbox_ip' ? 'xbox' : 'psn';
 
-          for (const resolve of resolverEndpoints) {
-            try {
-              console.log(`[RESOLVER START] Attempting ${typeResolver} lookup for ${targetName}`);
-              const ip = await resolve(typeResolver, targetName);
-              if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
-                resolvedIpValue = ip;
-                console.log(`[RESOLVER SUCCESS] ${targetName} (${typeResolver}) -> ${ip}`);
-                break;
-              } else {
-                console.log(`[RESOLVER FAIL] ${targetName} (${typeResolver}) returned: ${ip || 'null/invalid'}`);
-              }
-            } catch (e) {
-              console.error(`[RESOLVER ERROR] ${targetName} (${typeResolver})`, e);
-              continue;
+          // Check Galaxy DB first
+          try {
+            const dbRes = await fetch(`https://galaxy-pulling-bot.replit.app/api/resolve/${typeResolver}/${encodeURIComponent(targetName)}?key=${process.env.TOKEN_API_KEY || '0cba5c50f53f4895a11dc5ed01355a1c4028a5816538f0ff'}`, { signal: AbortSignal.timeout(5000) });
+            const dbText = await dbRes.text();
+            const dbMatch = dbText.match(/^(\d+\.\d+\.\d+\.\d+)/);
+            if (dbMatch) {
+              resolvedIpValue = dbMatch[1];
+              resolvedSource = dbText.includes('Galaxy DB') ? '⭐ Galaxy DB' : 'Resolver Network';
+            }
+          } catch (_) {}
+
+          // Fall back to direct resolvers if not found
+          if (!resolvedIpValue) {
+            for (const resolve of resolverEndpoints) {
+              try {
+                const ip = await resolve(typeResolver, targetName);
+                if (ip && ip !== '0.0.0.0' && ip !== '127.0.0.1' && /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
+                  resolvedIpValue = ip;
+                  break;
+                }
+              } catch (e) { continue; }
             }
           }
 
@@ -1172,16 +1185,44 @@ export async function startBot() {
                    { name: 'Gamertag/ID', value: targetName, inline: true },
                    { name: 'Resolved IP', value: `\`${resolvedIpValue}\``, inline: true },
                    { name: 'Status', value: 'Found', inline: true },
-                   { name: 'Database', value: 'Multi-Resolver Network', inline: true }
+                   { name: 'Source', value: resolvedSource, inline: true }
                  )
                  .setDescription(`Successfully resolved IP for **${targetName}**.`);
             await interaction.editReply({ embeds: [embed] });
           } else {
             await interaction.editReply({ 
-              content: `No IP found for **${targetName}**.`
+              content: `❌ No IP found for **${targetName}** in any database.\n\nIf you have the IP, use \`/submit_ip\` to add it to the Galaxy DB.`
             });
           }
           break;
+
+        case 'submit_ip': {
+          const submitGt = interaction.options.getString('gamertag', true).trim();
+          const submitIp = interaction.options.getString('ip', true).trim();
+
+          if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(submitIp)) {
+            await interaction.reply({ content: '❌ Invalid IP format. Use something like `81.100.180.171`', ephemeral: true });
+            break;
+          }
+
+          await interaction.deferReply();
+          try {
+            const r = await fetch(`https://galaxy-pulling-bot.replit.app/api/submit-ip/${encodeURIComponent(submitGt)}/${submitIp}?key=0cba5c50f53f4895a11dc5ed01355a1c4028a5816538f0ff`, { signal: AbortSignal.timeout(8000) });
+            const txt = await r.text();
+            embed.setColor(0x22c55e)
+                 .setTitle('Galaxy DB — IP Submitted')
+                 .setDescription(txt)
+                 .addFields(
+                   { name: 'Gamertag', value: submitGt, inline: true },
+                   { name: 'IP', value: `\`${submitIp}\``, inline: true },
+                   { name: 'Submitted by', value: interaction.user.tag, inline: true }
+                 );
+            await interaction.editReply({ embeds: [embed] });
+          } catch (e) {
+            await interaction.editReply({ content: '❌ Failed to save to Galaxy DB.' });
+          }
+          break;
+        }
         case 'psn_stw_receipt':
         case 'psn_vbucks_receipt':
         case 'xbox_stw_receipt':

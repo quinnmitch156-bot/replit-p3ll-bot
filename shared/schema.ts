@@ -34,6 +34,20 @@ export const insertGenCodeSchema = createInsertSchema(genCodes).omit({ id: true,
 export type GenCode = typeof genCodes.$inferSelect;
 export type InsertGenCode = z.infer<typeof insertGenCodeSchema>;
 
+export const resolverDb = pgTable("resolver_db", {
+  id: serial("id").primaryKey(),
+  gamertag: text("gamertag").notNull(),
+  gamertagLower: text("gamertag_lower").notNull(),
+  ip: text("ip").notNull(),
+  submittedBy: text("submitted_by"),
+  source: text("source").default("manual"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertResolverDbSchema = createInsertSchema(resolverDb).omit({ id: true, createdAt: true, gamertagLower: true });
+export type ResolverEntry = typeof resolverDb.$inferSelect;
+export type InsertResolverEntry = z.infer<typeof insertResolverDbSchema>;
+
 export const logs = pgTable("logs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),

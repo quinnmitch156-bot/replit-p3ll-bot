@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { users, keys, logs, genCodes, type User, type InsertUser, type Key, type InsertKey, type Log, type InsertLog, type GenCode } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { users, keys, logs, genCodes, resolverDb, type User, type InsertUser, type Key, type InsertKey, type Log, type InsertLog, type GenCode, type ResolverEntry } from "@shared/schema";
+import { eq, and, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -18,6 +18,11 @@ export interface IStorage {
   createGenCode(code: string): Promise<GenCode>;
   getGenCode(code: string): Promise<GenCode | undefined>;
   markGenCodeUsed(code: string, usedBy: string): Promise<GenCode>;
+
+  // Resolver DB operations
+  submitResolverEntry(gamertag: string, ip: string, submittedBy: string, source?: string): Promise<ResolverEntry>;
+  lookupResolverEntry(gamertag: string): Promise<ResolverEntry | undefined>;
+  getResolverDb(limit?: number): Promise<ResolverEntry[]>;
 
   // Log operations
   createLog(log: InsertLog): Promise<Log>;
@@ -83,6 +88,33 @@ export class DatabaseStorage implements IStorage {
   async markGenCodeUsed(code: string, usedBy: string): Promise<GenCode> {
     const [updated] = await db.update(genCodes).set({ used: true, usedBy }).where(eq(genCodes.code, code)).returning();
     return updated;
+  }
+
+  async submitResolverEntry(gamertag: string, ip: string, submittedBy: string, source = 'manual'): Promise<ResolverEntry> {
+    const lower = gamertag.toLowerCase();
+    // Upsert: update IP if gamertag already exists, otherwise insert
+    const existing = await this.lookupResolverEntry(gamertag);
+    if (existing) {
+      const [updated] = await db.update(resolverDb)
+        .set({ ip, submittedBy, source, createdAt: new Date() })
+        .where(eq(resolverDb.gamertagLower, lower))
+        .returning();
+      return updated;
+    }
+    const [entry] = await db.insert(resolverDb).values({ gamertag, gamertagLower: lower, ip, submittedBy, source }).returning();
+    return entry;
+  }
+
+  async lookupResolverEntry(gamertag: string): Promise<ResolverEntry | undefined> {
+    const [entry] = await db.select().from(resolverDb)
+      .where(eq(resolverDb.gamertagLower, gamertag.toLowerCase()))
+      .orderBy(desc(resolverDb.createdAt))
+      .limit(1);
+    return entry;
+  }
+
+  async getResolverDb(limit = 50): Promise<ResolverEntry[]> {
+    return db.select().from(resolverDb).orderBy(desc(resolverDb.createdAt)).limit(limit);
   }
 
   async createLog(log: InsertLog): Promise<Log> {

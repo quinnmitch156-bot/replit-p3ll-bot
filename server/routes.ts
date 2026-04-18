@@ -190,6 +190,13 @@ export async function registerRoutes(
       },
     ];
 
+    // Check local database first
+    const dbEntry = await storage.lookupResolverEntry(name);
+    if (dbEntry) {
+      res.type('text/plain').send(`${dbEntry.ip} (via Galaxy DB)`);
+      return;
+    }
+
     let found: string | null = null;
     let source = 'Not found';
     const sourceNames = ['L3P','Psychotic','Psychotic V2','Lanc','X-Resolver','Resolver.lol','Octosniff','Snusbase'];
@@ -201,10 +208,24 @@ export async function registerRoutes(
     }
 
     if (found) {
+      // Auto-save successful external lookups to DB
+      await storage.submitResolverEntry(name, found, 'auto', source).catch(() => {});
       res.type('text/plain').send(`${found} (via ${source})`);
     } else {
       res.type('text/plain').send('No IP found in any resolver database for: ' + name);
     }
+  });
+
+  // Submit IP to local resolver DB
+  // BotGhost: GET /api/submit-ip/{gamertag}/{ip}?key=YOUR_API_KEY
+  app.get('/api/submit-ip/:gamertag/:ip', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const { gamertag, ip } = req.params;
+    if (!ip.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      return res.type('text/plain').send('Invalid IP format. Use: 1.2.3.4');
+    }
+    await storage.submitResolverEntry(gamertag, ip, 'discord_user', 'manual');
+    res.type('text/plain').send(`✅ Saved: ${gamertag} → ${ip} added to Galaxy DB`);
   });
 
   // AOV Script Generator — Xbox
