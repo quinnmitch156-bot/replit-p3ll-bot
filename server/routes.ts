@@ -190,29 +190,49 @@ export async function registerRoutes(
       },
     ];
 
+    // Helper: geo-lookup an IP and return formatted info lines
+    async function geoLookup(ip: string): Promise<string> {
+      try {
+        const g = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp,org`, { signal: AbortSignal.timeout(5000) });
+        const d: any = await g.json();
+        if (d.status === 'success') {
+          return [
+            `IP: ${ip}`,
+            `Country: ${d.country}`,
+            `Region: ${d.regionName}`,
+            `City: ${d.city}`,
+            `ISP: ${d.isp}`,
+            `Org: ${d.org}`,
+          ].join('\n');
+        }
+      } catch (_) {}
+      return `IP: ${ip}`;
+    }
+
     // Check local database first
     const dbEntry = await storage.lookupResolverEntry(name);
     if (dbEntry) {
-      res.type('text/plain').send(`${dbEntry.ip} (via Galaxy DB)`);
+      const info = await geoLookup(dbEntry.ip);
+      res.type('text/plain').send(info);
       return;
     }
 
     let found: string | null = null;
-    let source = 'Not found';
     const sourceNames = ['L3P','Psychotic','Psychotic V2','Lanc','X-Resolver','Resolver.lol','Octosniff','Snusbase'];
     for (let i = 0; i < resolvers.length; i++) {
       try {
         const ip = await resolvers[i]();
-        if (ip && ip.match(/\d+\.\d+\.\d+\.\d+/)) { found = ip; source = sourceNames[i]; break; }
+        if (ip && ip.match(/\d+\.\d+\.\d+\.\d+/)) { found = ip; break; }
       } catch (_) {}
     }
 
     if (found) {
       // Auto-save successful external lookups to DB
-      await storage.submitResolverEntry(name, found, 'auto', source).catch(() => {});
-      res.type('text/plain').send(`${found} (via ${source})`);
+      await storage.submitResolverEntry(name, found, 'auto', sourceNames[0]).catch(() => {});
+      const info = await geoLookup(found);
+      res.type('text/plain').send(info);
     } else {
-      res.type('text/plain').send('No IP found in any resolver database for: ' + name);
+      res.type('text/plain').send(`❌ No IP found for: ${name}`);
     }
   });
 
