@@ -361,6 +361,7 @@ export async function registerRoutes(
     let xuid = '', bio = 'null', realName = 'null', gamerpicUrl = '';
     let presenceState = 'Offline', lastGame = 'N/A', device = 'N/A', lastSeen = 'N/A';
     let gamerscore = '0', gamertagResolved = gamertag;
+    let followerCount = 'N/A';
 
     if (xblKey) {
       try {
@@ -373,14 +374,33 @@ export async function registerRoutes(
           const user = (pd.profileUsers || pd.content?.profileUsers)?.[0];
           if (user) {
             xuid = user.id || '';
-            gamertagResolved = user.settings?.find((s: any) => s.id === 'Gamertag')?.value || gamertag;
-            gamerscore = user.settings?.find((s: any) => s.id === 'Gamerscore')?.value || '0';
-            bio = user.settings?.find((s: any) => s.id === 'Bio')?.value || 'null';
-            realName = user.settings?.find((s: any) => s.id === 'RealName')?.value || 'null';
-            gamerpicUrl = user.settings?.find((s: any) => s.id === 'GameDisplayPicRaw')?.value || '';
+            const settings = user.settings || [];
+            const getSetting = (id: string) => settings.find((s: any) => s.id === id)?.value;
+            gamertagResolved = getSetting('Gamertag') || gamertag;
+            gamerscore = getSetting('Gamerscore') || '0';
+            bio = getSetting('Bio') || 'null';
+            realName = getSetting('RealName') || 'null';
+            gamerpicUrl = getSetting('GameDisplayPicRaw') || '';
+            // Grab follower count if included in this response
+            if (getSetting('FollowerCount') != null) followerCount = getSetting('FollowerCount')!;
           }
         }
       } catch (_) {}
+
+      // ── 1b. Friends count via xbl.io /friends endpoint ───────────────────────
+      if (xuid) {
+        try {
+          const frRes = await fetch(
+            `https://xbl.io/api/v2/friends?xuid=${xuid}`,
+            { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000) }
+          );
+          if (frRes.ok) {
+            const frData: any = await frRes.json();
+            const people = frData.people || frData.content?.people || frData.users || frData.friends || [];
+            followerCount = Array.isArray(people) ? people.length.toString() : 'N/A';
+          }
+        } catch (_) {}
+      }
 
       // ── 2. Presence / activity ───────────────────────────────────────────
       if (xuid) {
@@ -523,6 +543,7 @@ export async function registerRoutes(
       bio,
       real_name: realName,
       profile_pic: gamerpicUrl || null,
+      follower_count: followerCount,
       // Presence Activity
       presence_state: presenceState,
       last_game: lastGame,
