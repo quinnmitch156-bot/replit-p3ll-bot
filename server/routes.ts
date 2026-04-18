@@ -487,25 +487,22 @@ export async function registerRoutes(
           );
           if (extRes.ok) {
             const extData: any = await extRes.json();
-            // Handle array of external auths or object with platforms
-            const auths: any[] = Array.isArray(extData) ? extData
-              : Array.isArray(extData.externalAuths) ? extData.externalAuths
-              : Array.isArray(extData.data) ? extData.data
-              : [];
-            for (const auth of auths) {
-              const t = (auth.type || auth.platform || '').toLowerCase();
-              const name = auth.externalDisplayName || auth.displayName || auth.name || auth.externalId || 'Linked';
-              if (t === 'steam') linkedSteam = name;
-              if (t === 'psn' || t === 'playstation') linkedPsn = name;
-              if (t === 'xbl' || t === 'xbox') linkedXbox = name;
-            }
-            // Also handle flat object like { steam: "name", psn: "name" }
-            if (!Array.isArray(extData) && extData && typeof extData === 'object') {
-              if (extData.steam) linkedSteam = extData.steam;
-              if (extData.psn || extData.playstation) linkedPsn = extData.psn || extData.playstation;
-              if (extData.xbl || extData.xbox) linkedXbox = extData.xbl || extData.xbox;
-              if (extData.epicDisplayName || extData.epic) epicDisplayName = extData.epicDisplayName || extData.epic || epicDisplayName;
-              if (extData.friends != null) epicFriends = extData.friends.toString();
+            // Response: array of accounts — grab first
+            const account = Array.isArray(extData) ? extData[0] : extData;
+            if (account) {
+              // externalAuths is an object keyed by platform type e.g. { xbl: {...}, steam: {...}, psn: {...} }
+              const authsObj = account.externalAuths || {};
+              for (const [platform, auth] of Object.entries(authsObj) as [string, any][]) {
+                const t = platform.toLowerCase();
+                const name = auth.externalDisplayName || auth.displayName || auth.externalAuthId || 'Linked';
+                if (t === 'steam') linkedSteam = name;
+                if (t === 'psn' || t === 'playstation') linkedPsn = name;
+                if (t === 'xbl' || t === 'xbox') linkedXbox = name;
+              }
+              // Also pick up top-level displayName as Epic display name if not already set
+              if (account.displayName && epicDisplayName === 'N/A') {
+                epicDisplayName = account.displayName;
+              }
             }
           }
         } catch (_) {}

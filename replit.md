@@ -54,6 +54,7 @@ A Discord bot for Epic Games / Xbox / PSN account OSINT, Fortnite stats, receipt
 | `OWNER_ID` | Discord user ID of the bot owner |
 | `STRIPE_SECRET_KEY` | Stripe key for card payment verification |
 | `XBL_TOKEN` | Xbox Live token for Xbox service |
+| `PROD_FORTNITE_API_KEY` | prod.api-fortnite.com API key for linked platforms (Steam/PSN/Xbox) |
 
 ## Epic Auth — 24/7 Setup
 Epic Bearer tokens expire every 8 hours. To make Epic APIs work permanently:
