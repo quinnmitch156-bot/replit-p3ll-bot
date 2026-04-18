@@ -522,7 +522,7 @@ export async function registerRoutes(
       gamerscore,
       bio,
       real_name: realName,
-      profile_pic: gamerpicUrl || 'N/A',
+      profile_pic: gamerpicUrl || null,
       // Presence Activity
       presence_state: presenceState,
       last_game: lastGame,
