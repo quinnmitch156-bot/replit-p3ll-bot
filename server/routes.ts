@@ -509,44 +509,37 @@ export async function registerRoutes(
       }
     }
 
-    // ── 4. Format output ─────────────────────────────────────────────────────
-    const lines: string[] = [
-      `🎮 Xbox Lookup: ${gamertagResolved}`,
-      ``,
-      `━━━ Epic Games Info ━━━`,
-      `Battle Pass Level: ${epicBattlePass}`,
-      `Display Name: ${epicDisplayName}`,
-      `Account ID: ${epicAccountId}`,
-      `Friends: ${epicFriends}`,
-      ``,
-      `━━━ Xbox Info ━━━`,
-      `XUID: ${xuid || 'N/A'}`,
-      `Gamerscore: ${gamerscore}`,
-      `Bio: ${bio}`,
-      `Real Name: ${realName}`,
-      gamerpicUrl ? `Profile Pic: ${gamerpicUrl}` : '',
-      ``,
-      `━━━ Presence Activity ━━━`,
-      `Presence State: ${presenceState}`,
-      `Last Game: ${lastGame}`,
-      `Device: ${device}`,
-      `Last Seen: ${lastSeen}`,
-      ``,
-      `━━━ Stats ━━━`,
-      `Total Matches: ${fnTotalMatches}`,
-      `Wins: ${fnWins}`,
-      `Kills: ${fnKills}`,
-      `Minutes Played: ${fnMinutesPlayed}`,
-      `Last Played: ${fnLastPlayed}`,
-      ``,
-      `━━━ Linked Platforms ━━━`,
-      `Xbox: ${linkedXbox}`,
-      `Steam: ${linkedSteam}`,
-      `PSN: ${linkedPsn}`,
-      `Epic: ${epicDisplayName !== 'Not Linked' ? epicDisplayName : 'N/A'}`,
-    ].filter(l => l !== null && l !== undefined);
-
-    res.type('text/plain').send(lines.join('\n'));
+    // ── 4. Return as JSON fields for BotGhost embed mapping ──────────────────
+    res.json({
+      gamertag: gamertagResolved,
+      // Epic Games Info
+      epic_display_name: epicDisplayName,
+      epic_account_id: epicAccountId,
+      epic_battle_pass: epicBattlePass,
+      epic_friends: epicFriends,
+      // Xbox Info
+      xuid: xuid || 'N/A',
+      gamerscore,
+      bio,
+      real_name: realName,
+      profile_pic: gamerpicUrl || 'N/A',
+      // Presence Activity
+      presence_state: presenceState,
+      last_game: lastGame,
+      device,
+      last_seen: lastSeen,
+      // Stats
+      total_matches: fnTotalMatches,
+      wins: fnWins,
+      kills: fnKills,
+      minutes_played: fnMinutesPlayed,
+      last_played: fnLastPlayed,
+      // Linked Platforms
+      linked_xbox: linkedXbox,
+      linked_steam: linkedSteam,
+      linked_psn: linkedPsn,
+      linked_epic: epicDisplayName !== 'Not Linked' ? epicDisplayName : 'N/A',
+    });
   });
 
   // Gen Code admin — generates a new one-time code
