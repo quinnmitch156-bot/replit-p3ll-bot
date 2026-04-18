@@ -119,6 +119,94 @@ export async function registerRoutes(
     res.status(epicRes.status).json(data);
   });
 
+  // Xbox/PSN IP Resolver — tries all resolver networks server-side, bypassing Cloudflare
+  // BotGhost: GET /api/resolve/xbl/{gamertag}?key=YOUR_API_KEY
+  // BotGhost: GET /api/resolve/psn/{username}?key=YOUR_API_KEY
+  app.get('/api/resolve/:type/:username', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const type = req.params.type.toLowerCase(); // xbl or psn
+    const name = req.params.username;
+
+    const browsers = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0',
+    ];
+    const ua = browsers[Math.floor(Math.random() * browsers.length)];
+
+    const resolvers: Array<() => Promise<string | null>> = [
+      async () => {
+        const r = await fetch(`https://api.l3p.xyz/resolver/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || (d.data && d.data.ip) || null;
+      },
+      async () => {
+        const r = await fetch(`https://api.psychotic.pro/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.Address || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://psychotic.pro/api/v2/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://lanc-remastered.net/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://x-resolver.com/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || (d.resolved && d.resolved.ip) || null;
+      },
+      async () => {
+        const r = await fetch(`https://resolver.lol/api/v1/resolve/${type}/${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://api.octosniff.net/resolve?type=${type}&username=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': ua } });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.Address || null;
+      },
+      // Snusbase fallback
+      async () => {
+        if (!process.env.Authorization) return null;
+        const r = await fetch('https://api.snusbase.com/data/search', {
+          method: 'POST', signal: AbortSignal.timeout(8000),
+          headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms: [name], types: ['username'], wildcard: false })
+        });
+        if (!r.ok) return null;
+        const d = await r.json();
+        for (const src in (d.results || {})) {
+          for (const entry of d.results[src]) {
+            const ip = entry.ip || entry.lastip || entry.last_ip;
+            if (ip) return ip;
+          }
+        }
+        return null;
+      },
+    ];
+
+    let found: string | null = null;
+    let source = 'Not found';
+    const sourceNames = ['L3P','Psychotic','Psychotic V2','Lanc','X-Resolver','Resolver.lol','Octosniff','Snusbase'];
+    for (let i = 0; i < resolvers.length; i++) {
+      try {
+        const ip = await resolvers[i]();
+        if (ip && ip.match(/\d+\.\d+\.\d+\.\d+/)) { found = ip; source = sourceNames[i]; break; }
+      } catch (_) {}
+    }
+
+    if (found) {
+      res.type('text/plain').send(`${found} (via ${source})`);
+    } else {
+      res.type('text/plain').send('No IP found in any resolver database for: ' + name);
+    }
+  });
+
   // Gen Code admin — generates a new one-time code
   // Supports both GET and POST so BotGhost works regardless of method
   // BotGhost: GET /api/gen-code?key=YOUR_API_KEY
