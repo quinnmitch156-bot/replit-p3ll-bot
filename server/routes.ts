@@ -477,33 +477,39 @@ export async function registerRoutes(
         }
       } catch (_) {}
 
-      // Also try Epic external auths for linked platforms (Steam/PSN)
-      try {
-        const epicToken = await getEpicAccessToken();
-        if (epicToken && epicAccountId !== 'N/A') {
-          const authsRes = await fetch(
-            `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${epicAccountId}/externalAuths`,
-            { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
+      // Linked platforms via prod.api-fortnite.com
+      const prodFnKey = process.env.PROD_FORTNITE_API_KEY || '';
+      if (prodFnKey) {
+        try {
+          const extRes = await fetch(
+            `https://prod.api-fortnite.com/api/v1/account/external/xbl/displayName/${encodeURIComponent(gamertag)}`,
+            { headers: { 'x-api-key': prodFnKey }, signal: AbortSignal.timeout(8000) }
           );
-          if (authsRes.ok) {
-            const auths: any[] = await authsRes.json();
+          if (extRes.ok) {
+            const extData: any = await extRes.json();
+            // Handle array of external auths or object with platforms
+            const auths: any[] = Array.isArray(extData) ? extData
+              : Array.isArray(extData.externalAuths) ? extData.externalAuths
+              : Array.isArray(extData.data) ? extData.data
+              : [];
             for (const auth of auths) {
-              if (auth.type === 'steam') linkedSteam = auth.externalDisplayName || auth.externalId || 'Linked';
-              if (auth.type === 'psn') linkedPsn = auth.externalDisplayName || auth.externalId || 'Linked';
-              if (auth.type === 'xbl') linkedXbox = auth.externalDisplayName || gamertagResolved;
+              const t = (auth.type || auth.platform || '').toLowerCase();
+              const name = auth.externalDisplayName || auth.displayName || auth.name || auth.externalId || 'Linked';
+              if (t === 'steam') linkedSteam = name;
+              if (t === 'psn' || t === 'playstation') linkedPsn = name;
+              if (t === 'xbl' || t === 'xbox') linkedXbox = name;
+            }
+            // Also handle flat object like { steam: "name", psn: "name" }
+            if (!Array.isArray(extData) && extData && typeof extData === 'object') {
+              if (extData.steam) linkedSteam = extData.steam;
+              if (extData.psn || extData.playstation) linkedPsn = extData.psn || extData.playstation;
+              if (extData.xbl || extData.xbox) linkedXbox = extData.xbl || extData.xbox;
+              if (extData.epicDisplayName || extData.epic) epicDisplayName = extData.epicDisplayName || extData.epic || epicDisplayName;
+              if (extData.friends != null) epicFriends = extData.friends.toString();
             }
           }
-          // Friends count
-          const friendsRes = await fetch(
-            `https://friends-public-service-prod06.ol.epicgames.com/friends/api/public/friends/${epicAccountId}?includePending=false`,
-            { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
-          );
-          if (friendsRes.ok) {
-            const friends: any[] = await friendsRes.json();
-            epicFriends = Array.isArray(friends) ? friends.length.toString() : 'N/A';
-          }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
 
     // ── 4. Format output ─────────────────────────────────────────────────────
