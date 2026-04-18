@@ -442,108 +442,69 @@ export async function registerRoutes(
       }
     }
 
-    // ── 3. Epic Games account info ───────────────────────────────────────────
+    // ── 3. Fortnite stats via fortnite-api.com ──────────────────────────────
     let epicDisplayName = 'Not Linked', epicAccountId = 'N/A', epicFriends = 'N/A', epicBattlePass = 'N/A';
-    let fnTotalMatches = 'N/A', fnLastPlayed = 'N/A', fnMinutesPlayed = 'N/A';
+    let fnTotalMatches = 'N/A', fnLastPlayed = 'N/A', fnMinutesPlayed = 'N/A', fnWins = 'N/A', fnKills = 'N/A';
     let linkedXbox = gamertagResolved, linkedSteam = 'N/A', linkedPsn = 'N/A';
-    let gunsmithTitle = 'N/A', gunsmithDate = 'N/A';
 
-    try {
-      const epicToken = await getEpicAccessToken();
-      if (epicToken) {
-        // Look up Epic account by Xbox gamertag
-        const epicRes = await fetch(
-          `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup/externalAuth/xbl/displayName/${encodeURIComponent(gamertag)}`,
-          { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(8000) }
+    const fnApiKey = process.env.FORTNITE_API_KEY || '';
+    if (fnApiKey) {
+      try {
+        // Lookup by Xbox gamertag (accountType=xbl)
+        const fnRes = await fetch(
+          `https://fortnite-api.com/v2/stats/br/v2?name=${encodeURIComponent(gamertag)}&accountType=xbl`,
+          { headers: { 'Authorization': fnApiKey }, signal: AbortSignal.timeout(10000) }
         );
-        if (epicRes.ok) {
-          const eData: any = await epicRes.json();
-          epicDisplayName = eData.displayName || 'Linked';
-          epicAccountId = eData.id || 'N/A';
+        if (fnRes.ok) {
+          const fnData: any = await fnRes.json();
+          const d = fnData.data;
+          if (d) {
+            // Account info
+            epicDisplayName = d.account?.name || gamertag;
+            epicAccountId = d.account?.id || 'N/A';
+            epicBattlePass = d.battlePass?.level?.toString() || 'N/A';
 
-          // Fetch full account details (for linked platforms)
-          const [acctRes, fnStatsRes, friendsRes] = await Promise.allSettled([
-            fetch(
-              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${epicAccountId}/externalAuths`,
-              { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
-            ),
-            fetch(
-              `https://fortnite-public-service-prod11.ol.epicgames.com/fortnite/api/stats/accountId/${epicAccountId}/bulk/window/alltime`,
-              { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(8000) }
-            ),
-            fetch(
-              `https://friends-public-service-prod06.ol.epicgames.com/friends/api/public/friends/${epicAccountId}?includePending=false`,
-              { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
-            ),
-          ]);
+            // Overall stats (all input types combined)
+            const overall = d.stats?.all?.overall;
+            if (overall) {
+              fnTotalMatches = overall.matches?.toString() || 'N/A';
+              fnWins = overall.wins?.toString() || 'N/A';
+              fnKills = overall.kills?.toString() || 'N/A';
+              fnMinutesPlayed = overall.minutesPlayed?.toString() || 'N/A';
+              fnLastPlayed = overall.lastModified || 'N/A';
+            }
+          }
+        }
+      } catch (_) {}
 
-          // External auth / linked platforms
-          if (acctRes.status === 'fulfilled' && acctRes.value.ok) {
-            const auths: any[] = await acctRes.value.json();
+      // Also try Epic external auths for linked platforms (Steam/PSN)
+      try {
+        const epicToken = await getEpicAccessToken();
+        if (epicToken && epicAccountId !== 'N/A') {
+          const authsRes = await fetch(
+            `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${epicAccountId}/externalAuths`,
+            { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
+          );
+          if (authsRes.ok) {
+            const auths: any[] = await authsRes.json();
             for (const auth of auths) {
               if (auth.type === 'steam') linkedSteam = auth.externalDisplayName || auth.externalId || 'Linked';
               if (auth.type === 'psn') linkedPsn = auth.externalDisplayName || auth.externalId || 'Linked';
               if (auth.type === 'xbl') linkedXbox = auth.externalDisplayName || gamertagResolved;
             }
           }
-
-          // Fortnite stats
-          if (fnStatsRes.status === 'fulfilled' && fnStatsRes.value.ok) {
-            const stats: any = await fnStatsRes.value.json();
-            // Aggregate all modes
-            let totalMatches = 0, totalMinutes = 0; let latestDate = '';
-            for (const key in stats) {
-              const s = stats[key];
-              if (key.includes('_matches')) totalMatches += s || 0;
-              if (key.includes('_minutesplayed')) totalMinutes += s || 0;
-              if (key.includes('lastmodified') && s) {
-                if (!latestDate || s > latestDate) latestDate = s;
-              }
-            }
-            // Simpler: use top-level if available
-            const br = (key: string) => stats[key] || 0;
-            const allMatches = br('br_m_solo_matchesplayed') + br('br_m_duo_matchesplayed') + br('br_m_squad_matchesplayed');
-            fnTotalMatches = allMatches > 0 ? allMatches.toString() : (totalMatches > 0 ? totalMatches.toString() : 'N/A');
-            fnMinutesPlayed = totalMinutes > 0 ? totalMinutes.toString() : 'N/A';
-            fnLastPlayed = latestDate || 'N/A';
-          }
-
-          // Try Fortnite profile for Battle Pass level + last played + gunsmith title
-          try {
-            const bpRes = await fetch(
-              `https://fortnite-public-service-prod11.ol.epicgames.com/fortnite/api/game/v2/profile/${epicAccountId}/client/QueryProfile?profileId=athena&rvn=-1`,
-              {
-                method: 'POST', body: '{}',
-                headers: { 'Authorization': `Bearer ${epicToken}`, 'Content-Type': 'application/json' },
-                signal: AbortSignal.timeout(8000)
-              }
-            );
-            if (bpRes.ok) {
-              const bpData: any = await bpRes.json();
-              const prof = bpData.profileChanges?.[0]?.profile;
-              const attrs = prof?.stats?.attributes;
-              if (attrs) {
-                epicBattlePass = attrs.level?.toString() || attrs.book_level?.toString() || '1';
-                if (attrs.last_match_end_datetime) fnLastPlayed = attrs.last_match_end_datetime;
-                // Highest match count
-                const season = attrs.lifetime_wins != null ? `Wins: ${attrs.lifetime_wins}` : null;
-                // Gunsmith — look for active title
-                if (attrs.active_loadout_index != null || attrs.banner_icon_template) {
-                  gunsmithTitle = 'Fortnite';
-                  gunsmithDate = fnLastPlayed;
-                }
-              }
-            }
-          } catch (_) {}
-
           // Friends count
-          if (friendsRes.status === 'fulfilled' && friendsRes.value.ok) {
-            const friends: any[] = await friendsRes.value.json();
+          const friendsRes = await fetch(
+            `https://friends-public-service-prod06.ol.epicgames.com/friends/api/public/friends/${epicAccountId}?includePending=false`,
+            { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
+          );
+          if (friendsRes.ok) {
+            const friends: any[] = await friendsRes.json();
             epicFriends = Array.isArray(friends) ? friends.length.toString() : 'N/A';
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
     // ── 4. Format output ─────────────────────────────────────────────────────
     const lines: string[] = [
@@ -570,8 +531,10 @@ export async function registerRoutes(
       ``,
       `━━━ Stats ━━━`,
       `Total Matches: ${fnTotalMatches}`,
-      `Last Played: ${fnLastPlayed}`,
+      `Wins: ${fnWins}`,
+      `Kills: ${fnKills}`,
       `Minutes Played: ${fnMinutesPlayed}`,
+      `Last Played: ${fnLastPlayed}`,
       ``,
       `━━━ Linked Platforms ━━━`,
       `Xbox: ${linkedXbox}`,
