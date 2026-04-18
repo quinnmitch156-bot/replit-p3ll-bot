@@ -207,6 +207,108 @@ export async function registerRoutes(
     }
   });
 
+  // AOV Script Generator — Xbox
+  // BotGhost: GET /api/aov/xbox/{gamertag}/{ip}?key=YOUR_API_KEY
+  app.get('/api/aov/xbox/:gamertag/:ip', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const { gamertag, ip } = req.params;
+
+    let location = 'Unknown, Unknown';
+    let isp = 'Unknown ISP';
+    let email = 'Not Found';
+
+    try {
+      const ipRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp`);
+      const ipData: any = await ipRes.json();
+      if (ipData.status === 'success') {
+        location = `${ipData.country}, ${ipData.regionName}, ${ipData.city}`;
+        isp = ipData.isp || 'Unknown ISP';
+      }
+    } catch (_) {}
+
+    if (process.env.Authorization) {
+      try {
+        const snusRes = await fetch('https://api.snusbase.com/data/search', {
+          method: 'POST',
+          headers: { 'Auth': process.env.Authorization, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms: [gamertag], types: ['username'], wildcard: false })
+        });
+        if (snusRes.ok) {
+          const snusData: any = await snusRes.json();
+          for (const src in (snusData.results || {})) {
+            const entry = snusData.results[src].find((r: any) => r.email);
+            if (entry) { email = entry.email; break; }
+          }
+        }
+      } catch (_) {}
+    }
+
+    const script = [
+      `✅ AOV Created for: ${gamertag}`,
+      ``,
+      `📡 IP & Location`,
+      `IP: ${ip}`,
+      `Location: ${location}`,
+      `ISP: ${isp}`,
+      ``,
+      `🎮 Xbox Gamertag: ${gamertag}`,
+      ``,
+      `📩 Email: ${email}`,
+      ``,
+      `📄 AOV Script`,
+      `Hello Epic Games, my IP is ${ip}.`,
+      `My Xbox gamertag is ${gamertag}.`,
+      `My purchases near ${location}.`,
+      `I never used my Credit Card for any purchases on Fortnite.`,
+      `I only paid my purchases using Xbox Account balance, therefore there are no invoice ids.`,
+      `Below I have attached a screenshot of my oldest purchase.`,
+      `Thank you for your help, I hope I will hear from you soon.`
+    ].join('\n');
+
+    res.type('text/plain').send(script);
+  });
+
+  // AOV Script Generator — PSN
+  // BotGhost: GET /api/aov/psn/{psn_name}/{ip}?key=YOUR_API_KEY
+  app.get('/api/aov/psn/:psn_name/:ip', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const { psn_name, ip } = req.params;
+
+    let location = 'Unknown, Unknown';
+    let isp = 'Unknown ISP';
+
+    try {
+      const ipRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp`);
+      const ipData: any = await ipRes.json();
+      if (ipData.status === 'success') {
+        location = `${ipData.country}, ${ipData.regionName}, ${ipData.city}`;
+        isp = ipData.isp || 'Unknown ISP';
+      }
+    } catch (_) {}
+
+    const script = [
+      `✅ AOV Created for: ${psn_name}`,
+      ``,
+      `📡 IP & Location`,
+      `IP: ${ip}`,
+      `Location: ${location}`,
+      `ISP: ${isp}`,
+      ``,
+      `🎮 PSN ID: ${psn_name}`,
+      ``,
+      `📄 AOV Script`,
+      `Hello Epic Games, my IP is ${ip}.`,
+      `My first Epic Games username was ${psn_name}.`,
+      `My purchases near ${location}.`,
+      `I never used my Credit Card for any purchases on Fortnite.`,
+      `I only paid my purchases using PlayStation Account balance, therefore there are no invoice ids.`,
+      `Below I have attached a screenshot of my oldest purchase.`,
+      `Thank you for your help, I hope I will hear from you soon.`
+    ].join('\n');
+
+    res.type('text/plain').send(script);
+  });
+
   // Gen Code admin — generates a new one-time code
   // Supports both GET and POST so BotGhost works regardless of method
   // BotGhost: GET /api/gen-code?key=YOUR_API_KEY
