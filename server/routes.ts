@@ -350,6 +350,239 @@ export async function registerRoutes(
     res.type('text/plain').send(script);
   });
 
+  // Xbox Lookup — full OSINT card (BotGhost compatible, plain text)
+  // BotGhost: GET /api/xbox-lookup/{gamertag}?key=YOUR_API_KEY
+  app.get('/api/xbox-lookup/:gamertag', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const { gamertag } = req.params;
+    const xblKey = process.env.XBL_IO_API_KEY || process.env.XBL_TOKEN || '';
+
+    // ── 1. Xbox profile via xbl.io ───────────────────────────────────────────
+    let xuid = '', bio = 'null', realName = 'null', gamerpicUrl = '';
+    let presenceState = 'Offline', lastGame = 'N/A', device = 'N/A', lastSeen = 'N/A';
+    let gamerscore = '0', gamertagResolved = gamertag;
+
+    if (xblKey) {
+      try {
+        const profileRes = await fetch(
+          `https://xbl.io/api/v2/friends/search?gt=${encodeURIComponent(gamertag)}`,
+          { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+        );
+        if (profileRes.ok) {
+          const pd: any = await profileRes.json();
+          const user = (pd.profileUsers || pd.content?.profileUsers)?.[0];
+          if (user) {
+            xuid = user.id || '';
+            gamertagResolved = user.settings?.find((s: any) => s.id === 'Gamertag')?.value || gamertag;
+            gamerscore = user.settings?.find((s: any) => s.id === 'Gamerscore')?.value || '0';
+            bio = user.settings?.find((s: any) => s.id === 'Bio')?.value || 'null';
+            realName = user.settings?.find((s: any) => s.id === 'RealName')?.value || 'null';
+            gamerpicUrl = user.settings?.find((s: any) => s.id === 'GameDisplayPicRaw')?.value || '';
+          }
+        }
+      } catch (_) {}
+
+      // ── 2. Presence / activity ───────────────────────────────────────────
+      if (xuid) {
+        try {
+          const presRes = await fetch(
+            `https://xbl.io/api/v2/presence/${xuid}`,
+            { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000) }
+          );
+          if (presRes.ok) {
+            const presRaw: any = await presRes.json();
+            const pdata = presRaw.content || presRaw;
+            presenceState = pdata.state || 'Offline';
+            // Online: check active device/title
+            const dev = pdata.devices?.[0];
+            if (dev) {
+              device = dev.type || device;
+              const title = dev.titles?.[0];
+              if (title) { lastGame = title.name || lastGame; lastSeen = title.lastModified || lastSeen; }
+            }
+            // Offline lastSeen block
+            if (pdata.lastSeen) {
+              if (pdata.lastSeen.deviceType) device = pdata.lastSeen.deviceType;
+              if (pdata.lastSeen.titleName) lastGame = pdata.lastSeen.titleName;
+              if (pdata.lastSeen.timestamp) lastSeen = pdata.lastSeen.timestamp;
+              // If titleName empty but titleId present, resolve via title history
+              if ((!lastGame || lastGame === 'N/A') && pdata.lastSeen.titleId) {
+                try {
+                  const histRes = await fetch(
+                    `https://xbl.io/api/v2/player/titleHistory/${xuid}`,
+                    { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json', 'Accept-Language': 'en-US' }, signal: AbortSignal.timeout(6000) }
+                  );
+                  if (histRes.ok) {
+                    const histRaw: any = await histRes.json();
+                    const titles = histRaw.content?.titles || histRaw.titles || [];
+                    const match = titles.find((t: any) => String(t.titleId) === String(pdata.lastSeen.titleId));
+                    if (match?.name) lastGame = match.name;
+                    else if (titles[0]?.name) lastGame = titles[0].name;
+                  }
+                } catch (_) {}
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // ── 2b. Title history for last game (fallback if still N/A) ────────────
+      if (xuid && (lastGame === 'N/A' || !lastGame)) {
+        try {
+          const histRes = await fetch(
+            `https://xbl.io/api/v2/player/titleHistory/${xuid}`,
+            { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json', 'Accept-Language': 'en-US' }, signal: AbortSignal.timeout(6000) }
+          );
+          if (histRes.ok) {
+            const histRaw: any = await histRes.json();
+            const titles = histRaw.content?.titles || histRaw.titles || [];
+            if (titles[0]?.name) lastGame = titles[0].name;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // ── 3. Epic Games account info ───────────────────────────────────────────
+    let epicDisplayName = 'Not Linked', epicAccountId = 'N/A', epicFriends = 'N/A', epicBattlePass = 'N/A';
+    let fnTotalMatches = 'N/A', fnLastPlayed = 'N/A', fnMinutesPlayed = 'N/A';
+    let linkedXbox = gamertagResolved, linkedSteam = 'N/A', linkedPsn = 'N/A';
+    let gunsmithTitle = 'N/A', gunsmithDate = 'N/A';
+
+    try {
+      const epicToken = await getEpicAccessToken();
+      if (epicToken) {
+        // Look up Epic account by Xbox gamertag
+        const epicRes = await fetch(
+          `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/lookup/externalAuth/xbl/displayName/${encodeURIComponent(gamertag)}`,
+          { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(8000) }
+        );
+        if (epicRes.ok) {
+          const eData: any = await epicRes.json();
+          epicDisplayName = eData.displayName || 'Linked';
+          epicAccountId = eData.id || 'N/A';
+
+          // Fetch full account details (for linked platforms)
+          const [acctRes, fnStatsRes, friendsRes] = await Promise.allSettled([
+            fetch(
+              `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${epicAccountId}/externalAuths`,
+              { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
+            ),
+            fetch(
+              `https://fortnite-public-service-prod11.ol.epicgames.com/fortnite/api/stats/accountId/${epicAccountId}/bulk/window/alltime`,
+              { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(8000) }
+            ),
+            fetch(
+              `https://friends-public-service-prod06.ol.epicgames.com/friends/api/public/friends/${epicAccountId}?includePending=false`,
+              { headers: { 'Authorization': `Bearer ${epicToken}` }, signal: AbortSignal.timeout(6000) }
+            ),
+          ]);
+
+          // External auth / linked platforms
+          if (acctRes.status === 'fulfilled' && acctRes.value.ok) {
+            const auths: any[] = await acctRes.value.json();
+            for (const auth of auths) {
+              if (auth.type === 'steam') linkedSteam = auth.externalDisplayName || auth.externalId || 'Linked';
+              if (auth.type === 'psn') linkedPsn = auth.externalDisplayName || auth.externalId || 'Linked';
+              if (auth.type === 'xbl') linkedXbox = auth.externalDisplayName || gamertagResolved;
+            }
+          }
+
+          // Fortnite stats
+          if (fnStatsRes.status === 'fulfilled' && fnStatsRes.value.ok) {
+            const stats: any = await fnStatsRes.value.json();
+            // Aggregate all modes
+            let totalMatches = 0, totalMinutes = 0; let latestDate = '';
+            for (const key in stats) {
+              const s = stats[key];
+              if (key.includes('_matches')) totalMatches += s || 0;
+              if (key.includes('_minutesplayed')) totalMinutes += s || 0;
+              if (key.includes('lastmodified') && s) {
+                if (!latestDate || s > latestDate) latestDate = s;
+              }
+            }
+            // Simpler: use top-level if available
+            const br = (key: string) => stats[key] || 0;
+            const allMatches = br('br_m_solo_matchesplayed') + br('br_m_duo_matchesplayed') + br('br_m_squad_matchesplayed');
+            fnTotalMatches = allMatches > 0 ? allMatches.toString() : (totalMatches > 0 ? totalMatches.toString() : 'N/A');
+            fnMinutesPlayed = totalMinutes > 0 ? totalMinutes.toString() : 'N/A';
+            fnLastPlayed = latestDate || 'N/A';
+          }
+
+          // Try Fortnite profile for Battle Pass level + last played + gunsmith title
+          try {
+            const bpRes = await fetch(
+              `https://fortnite-public-service-prod11.ol.epicgames.com/fortnite/api/game/v2/profile/${epicAccountId}/client/QueryProfile?profileId=athena&rvn=-1`,
+              {
+                method: 'POST', body: '{}',
+                headers: { 'Authorization': `Bearer ${epicToken}`, 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(8000)
+              }
+            );
+            if (bpRes.ok) {
+              const bpData: any = await bpRes.json();
+              const prof = bpData.profileChanges?.[0]?.profile;
+              const attrs = prof?.stats?.attributes;
+              if (attrs) {
+                epicBattlePass = attrs.level?.toString() || attrs.book_level?.toString() || '1';
+                if (attrs.last_match_end_datetime) fnLastPlayed = attrs.last_match_end_datetime;
+                // Highest match count
+                const season = attrs.lifetime_wins != null ? `Wins: ${attrs.lifetime_wins}` : null;
+                // Gunsmith — look for active title
+                if (attrs.active_loadout_index != null || attrs.banner_icon_template) {
+                  gunsmithTitle = 'Fortnite';
+                  gunsmithDate = fnLastPlayed;
+                }
+              }
+            }
+          } catch (_) {}
+
+          // Friends count
+          if (friendsRes.status === 'fulfilled' && friendsRes.value.ok) {
+            const friends: any[] = await friendsRes.value.json();
+            epicFriends = Array.isArray(friends) ? friends.length.toString() : 'N/A';
+          }
+        }
+      }
+    } catch (_) {}
+
+    // ── 4. Format output ─────────────────────────────────────────────────────
+    const lines: string[] = [
+      `🎮 Xbox Lookup: ${gamertagResolved}`,
+      ``,
+      `━━━ Epic Games Info ━━━`,
+      `Battle Pass Level: ${epicBattlePass}`,
+      `Display Name: ${epicDisplayName}`,
+      `Account ID: ${epicAccountId}`,
+      `Friends: ${epicFriends}`,
+      ``,
+      `━━━ Xbox Info ━━━`,
+      `XUID: ${xuid || 'N/A'}`,
+      `Gamerscore: ${gamerscore}`,
+      `Bio: ${bio}`,
+      `Real Name: ${realName}`,
+      gamerpicUrl ? `Profile Pic: ${gamerpicUrl}` : '',
+      ``,
+      `━━━ Presence Activity ━━━`,
+      `Presence State: ${presenceState}`,
+      `Last Game: ${lastGame}`,
+      `Device: ${device}`,
+      `Last Seen: ${lastSeen}`,
+      ``,
+      `━━━ Stats ━━━`,
+      `Total Matches: ${fnTotalMatches}`,
+      `Last Played: ${fnLastPlayed}`,
+      `Minutes Played: ${fnMinutesPlayed}`,
+      ``,
+      `━━━ Linked Platforms ━━━`,
+      `Xbox: ${linkedXbox}`,
+      `Steam: ${linkedSteam}`,
+      `PSN: ${linkedPsn}`,
+      `Epic: ${epicDisplayName !== 'Not Linked' ? epicDisplayName : 'N/A'}`,
+    ].filter(l => l !== null && l !== undefined);
+
+    res.type('text/plain').send(lines.join('\n'));
+  });
+
   // Gen Code admin — generates a new one-time code
   // Supports both GET and POST so BotGhost works regardless of method
   // BotGhost: GET /api/gen-code?key=YOUR_API_KEY
