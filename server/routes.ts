@@ -248,6 +248,102 @@ export async function registerRoutes(
     res.type('text/plain').send(`✅ Saved: ${gamertag} → ${ip} added to Galaxy DB`);
   });
 
+  // Xbox IP Resolver — JSON fields for BotGhost embed
+  // BotGhost: GET /api/xbox-resolve/{gamertag}?key=YOUR_API_KEY
+  app.get('/api/xbox-resolve/:gamertag', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const gamertag = req.params.gamertag;
+
+    const resolverNetworks: Array<() => Promise<string | null>> = [
+      // Galaxy DB first
+      async () => {
+        const entry = await storage.lookupResolverEntry(gamertag);
+        return entry ? entry.ip : null;
+      },
+      async () => {
+        const r = await fetch(`https://api.l3p.xyz/resolver/xbl/${encodeURIComponent(gamertag)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || (d.data?.ip) || null;
+      },
+      async () => {
+        const r = await fetch(`https://api.psychotic.pro/resolve/xbl/${encodeURIComponent(gamertag)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.Address || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://psychotic.pro/api/v2/resolve/xbl/${encodeURIComponent(gamertag)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://lanc-remastered.net/api/v1/resolve/xbl/${encodeURIComponent(gamertag)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || null;
+      },
+      async () => {
+        const r = await fetch(`https://x-resolver.com/api/v1/resolve/xbl/${encodeURIComponent(gamertag)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.resolved_ip || (d.resolved?.ip) || null;
+      },
+      async () => {
+        const r = await fetch(`https://api.octosniff.net/resolve?type=xbl&username=${encodeURIComponent(gamertag)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json(); return d.ip || d.Address || null;
+      },
+    ];
+
+    let ip: string | null = null;
+    for (const resolver of resolverNetworks) {
+      try {
+        const result = await resolver();
+        if (result && /\d+\.\d+\.\d+\.\d+/.test(result)) { ip = result; break; }
+      } catch (_) {}
+    }
+
+    if (!ip) {
+      return res.json({
+        gamertag,
+        found: false,
+        ip: null,
+        country: null,
+        region: null,
+        city: null,
+        isp: null,
+        org: null,
+        message: `❌ No IP found for: ${gamertag}`,
+      });
+    }
+
+    // Auto-save to Galaxy DB
+    await storage.submitResolverEntry(gamertag, ip, 'auto', 'xbox-resolve').catch(() => {});
+
+    // Geo lookup
+    let country = 'N/A', region = 'N/A', city = 'N/A', isp = 'N/A', org = 'N/A';
+    try {
+      const g = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp,org`, { signal: AbortSignal.timeout(5000) });
+      const geo: any = await g.json();
+      if (geo.status === 'success') {
+        country = geo.country || 'N/A';
+        region = geo.regionName || 'N/A';
+        city = geo.city || 'N/A';
+        isp = geo.isp || 'N/A';
+        org = geo.org || 'N/A';
+      }
+    } catch (_) {}
+
+    res.json({
+      gamertag,
+      found: true,
+      ip,
+      country,
+      region,
+      city,
+      isp,
+      org,
+      message: `✅ IP found for: ${gamertag}`,
+    });
+  });
+
   // AOV Script Generator — Xbox
   // BotGhost: GET /api/aov/xbox/{gamertag}/{ip}?key=YOUR_API_KEY
   app.get('/api/aov/xbox/:gamertag/:ip', async (req, res) => {
