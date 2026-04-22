@@ -276,8 +276,8 @@ export async function registerRoutes(
       usd: `$${p.usd}.00`,
       btc: `${p.btc} BTC`,
       address: BTC_ADDRESS,
-      instructions: `Send exactly **${p.btc} BTC** to the address below, then run **/paid** to notify the owner.`,
-      message: `✅ Payment details for **${p.label}**`,
+      instructions: `Send exactly ${p.btc} BTC to the address below, then run /paid to notify the owner.`,
+      message: `Plan: ${p.label}\nPrice: $${p.usd}.00 USD / ${p.btc} BTC\n\nBitcoin Address:\n${BTC_ADDRESS}\n\nSend EXACTLY ${p.btc} BTC. Once sent, run /paid to notify the owner. Access granted after blockchain confirmation (5-15 min).`,
     });
   });
 
