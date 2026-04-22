@@ -257,18 +257,27 @@ export async function registerRoutes(
   };
   const BTC_ADDRESS = 'bc1qlx7wdngc04vgdup90mh7rdd7x7u50mcj9vt5qx';
 
-  // Step 1 — return payment details for the embed
-  // BotGhost: GET /api/buy/details?plan={option_plan}&key=YOUR_API_KEY
+  // Step 1 — return payment details
+  // BotGhost: GET /api/buy/details/{option_plan}?key=YOUR_API_KEY
+  app.get('/api/buy/details/:plan', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const plan = (req.params.plan || '').toLowerCase().replace(/\s+/g, '_');
+    const p = BUY_PLANS[plan];
+    if (!p) {
+      return res.type('text/plain').send(`❌ Invalid plan "${req.params.plan}". Choose: monthly, lifetime, or lifetime_guide`);
+    }
+    res.type('text/plain').send(
+      `**Plan:** ${p.label}\n**Price:** $${p.usd}.00 USD | ${p.btc} BTC\n\n**Bitcoin Address:**\n\`${BTC_ADDRESS}\`\n\nSend EXACTLY **${p.btc} BTC** to the address above.\nOnce sent, run **/paid plan:${plan}** to notify the owner.\nAccess is granted after blockchain confirmation (5–15 min).`
+    );
+  });
+
+  // Also support query string version as fallback
   app.get('/api/buy/details', async (req, res) => {
     if (!checkKey(req, res)) return;
     const plan = (req.query.plan as string || '').toLowerCase().replace(/\s+/g, '_');
     const p = BUY_PLANS[plan];
     if (!p) {
-      return res.json({
-        found: false,
-        message: '❌ Invalid plan. Choose: `monthly`, `lifetime`, or `lifetime_guide`',
-        plan: null, usd: null, btc: null, address: null,
-      });
+      return res.type('text/plain').send(`❌ Invalid plan "${req.query.plan}". Choose: monthly, lifetime, or lifetime_guide`);
     }
     res.type('text/plain').send(
       `**Plan:** ${p.label}\n**Price:** $${p.usd}.00 USD | ${p.btc} BTC\n\n**Bitcoin Address:**\n\`${BTC_ADDRESS}\`\n\nSend EXACTLY **${p.btc} BTC** to the address above.\nOnce sent, run **/paid plan:${plan}** to notify the owner.\nAccess is granted after blockchain confirmation (5–15 min).`
