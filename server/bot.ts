@@ -1,8 +1,9 @@
-import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType, MessageFlags } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType, MessageFlags, AttachmentBuilder } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
 import { getEpicAccessToken, createDeviceAuth } from './services/epicAuth';
+import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
 
@@ -166,6 +167,9 @@ const commands = [
     .setDescription('Redeem a key and gain access to the bot')
     .addStringOption(option => option.setName('key').setDescription('The license key').setRequired(true)),
   new SlashCommandBuilder()
+    .setName('xbox_receipt')
+    .setDescription('Generate a Microsoft Xbox purchase receipt image'),
+  new SlashCommandBuilder()
     .setName('buy')
     .setDescription('Buy a product to get access to galaxy!'),
   new SlashCommandBuilder()
@@ -250,6 +254,51 @@ export async function startBot() {
       const hasSystemAccessRole = botAccessRoleId && interaction.guild && 
                                   interaction.member && 'roles' in interaction.member && 
                                   (interaction.member.roles as any).cache.has(botAccessRoleId);
+
+      if (interaction.commandName === 'xbox_receipt') {
+        const modal = new ModalBuilder()
+          .setCustomId('xbox_receipt_modal')
+          .setTitle('Enter Receipt Details');
+
+        const dateInput = new TextInputBuilder()
+          .setCustomId('receipt_date')
+          .setLabel('Date (YYYY-MM-DD)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g. 2001-02-11')
+          .setRequired(true);
+
+        const amountInput = new TextInputBuilder()
+          .setCustomId('receipt_amount')
+          .setLabel('Amount (Without Currency Symbol)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g. 39.99')
+          .setRequired(true);
+
+        const emailInput = new TextInputBuilder()
+          .setCustomId('receipt_email')
+          .setLabel('Your Email')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g. example@outlook.com')
+          .setRequired(true);
+
+        const itemInput = new TextInputBuilder()
+          .setCustomId('receipt_item')
+          .setLabel('Item Name')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("e.g. Fortnite - Standard Founder's Pack")
+          .setValue("Fortnite - Standard Founder's Pack")
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(dateInput),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(amountInput),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(itemInput),
+        );
+
+        await interaction.showModal(modal);
+        return;
+      }
 
       if (interaction.commandName === 'buy') {
         try {
@@ -1701,6 +1750,26 @@ Thank you for your help, I hope I will hear from you soon.`;
         } catch (_) {}
 
         await interaction.reply({ content: `✅ Access granted to <@${targetUserId}> (${planType}).`, ephemeral: true });
+      }
+    }
+
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'xbox_receipt_modal') {
+        await interaction.deferReply();
+        try {
+          const date     = interaction.fields.getTextInputValue('receipt_date').trim();
+          const amount   = interaction.fields.getTextInputValue('receipt_amount').trim();
+          const email    = interaction.fields.getTextInputValue('receipt_email').trim();
+          const itemName = interaction.fields.getTextInputValue('receipt_item').trim();
+
+          const imgBuffer = await generateXboxReceipt({ date, amount, email, itemName });
+          const attachment = new AttachmentBuilder(imgBuffer, { name: 'receipt.png' });
+
+          await interaction.editReply({ content: '', files: [attachment] });
+        } catch (err) {
+          console.error('xbox_receipt_modal error:', err);
+          await interaction.editReply({ content: '❌ Failed to generate receipt. Make sure your date is in YYYY-MM-DD format.' });
+        }
       }
     }
   });

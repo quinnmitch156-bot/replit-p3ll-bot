@@ -6,6 +6,7 @@ import { z } from "zod";
 import { startBot, dmOwner } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
+import { generateXboxReceipt } from "./services/receiptGenerator";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -309,6 +310,25 @@ export async function registerRoutes(
     res.type('text/plain').send(
       `✅ Payment claim submitted for **${planLabel}**!\n\nThe owner will verify your Bitcoin transaction on the blockchain and grant your access shortly (usually 5–15 min).\n\nDo NOT send again — just wait for confirmation.`
     );
+  });
+
+  // Xbox Receipt — generates a Microsoft-style receipt image
+  // BotGhost: GET /api/xbox-receipt/{date}/{amount}/{email}/{item}?key=YOUR_API_KEY
+  // OR query string: /api/xbox-receipt?date=2001-02-11&amount=39.99&email=x@x.com&item=Fortnite+-+Standard&key=...
+  app.get('/api/xbox-receipt', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const date     = req.query.date as string || '2001-01-01';
+    const amount   = req.query.amount as string || '0.00';
+    const email    = req.query.email as string || 'user@email.com';
+    const itemName = req.query.item as string || "Fortnite - Standard Founder's Pack";
+    try {
+      const img = await generateXboxReceipt({ date, amount, email, itemName });
+      res.set('Content-Type', 'image/png');
+      res.set('Content-Disposition', 'inline; filename="receipt.png"');
+      res.send(img);
+    } catch (err) {
+      res.status(400).type('text/plain').send('❌ Error generating receipt. Check date format (YYYY-MM-DD).');
+    }
   });
 
   // ─── End BotGhost /buy endpoints ────────────────────────────────────────────
