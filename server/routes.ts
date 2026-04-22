@@ -270,15 +270,9 @@ export async function registerRoutes(
         plan: null, usd: null, btc: null, address: null,
       });
     }
-    res.json({
-      found: true,
-      plan: p.label,
-      usd: `$${p.usd}.00`,
-      btc: `${p.btc} BTC`,
-      address: BTC_ADDRESS,
-      instructions: `Send exactly ${p.btc} BTC to the address below, then run /paid to notify the owner.`,
-      message: `Plan: ${p.label}\nPrice: $${p.usd}.00 USD / ${p.btc} BTC\n\nBitcoin Address:\n${BTC_ADDRESS}\n\nSend EXACTLY ${p.btc} BTC. Once sent, run /paid to notify the owner. Access granted after blockchain confirmation (5-15 min).`,
-    });
+    res.type('text/plain').send(
+      `**Plan:** ${p.label}\n**Price:** $${p.usd}.00 USD | ${p.btc} BTC\n\n**Bitcoin Address:**\n\`${BTC_ADDRESS}\`\n\nSend EXACTLY **${p.btc} BTC** to the address above.\nOnce sent, run **/paid plan:${plan}** to notify the owner.\nAccess is granted after blockchain confirmation (5–15 min).`
+    );
   });
 
   // Step 2 — user claims they've paid; DMs the owner
@@ -303,11 +297,9 @@ export async function registerRoutes(
       ],
     });
 
-    res.json({
-      message: `✅ Your payment claim for **${planLabel}** has been submitted! The owner will verify your transaction and grant access shortly (usually 5–15 min).`,
-      plan: planLabel,
-      discord_id: discordId,
-    });
+    res.type('text/plain').send(
+      `✅ Payment claim submitted for **${planLabel}**!\n\nThe owner will verify your Bitcoin transaction on the blockchain and grant your access shortly (usually 5–15 min).\n\nDo NOT send again — just wait for confirmation.`
+    );
   });
 
   // ─── End BotGhost /buy endpoints ────────────────────────────────────────────
