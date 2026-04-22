@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -7,11 +7,19 @@ import { startBot, dmOwner } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
+import fs from "fs";
+import path from "path";
+
+const RECEIPTS_DIR = path.resolve(process.cwd(), 'public/receipts');
+if (!fs.existsSync(RECEIPTS_DIR)) fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Serve generated receipt images
+  app.use('/receipts', express.static(RECEIPTS_DIR));
+
   // Start the Discord Bot
   startBot();
 
@@ -312,9 +320,10 @@ export async function registerRoutes(
     );
   });
 
-  // Xbox Receipt — generates a Microsoft-style receipt image
-  // BotGhost: GET /api/xbox-receipt/{date}/{amount}/{email}/{item}?key=YOUR_API_KEY
-  // OR query string: /api/xbox-receipt?date=2001-02-11&amount=39.99&email=x@x.com&item=Fortnite+-+Standard&key=...
+  // Xbox Receipt — generates a Microsoft-style receipt image and returns a hosted URL
+  // BotGhost: GET /api/xbox-receipt?date=2024-03-15&amount=39.99&email=x@x.com&item=Fortnite&key=...
+  // Response: plain-text URL like https://your-replit.dev/receipts/abc123.png
+  // Post that URL as a Discord message — Discord will auto-embed the image
   app.get('/api/xbox-receipt', async (req, res) => {
     if (!checkKey(req, res)) return;
     const date     = req.query.date as string || '2001-01-01';
@@ -323,9 +332,21 @@ export async function registerRoutes(
     const itemName = req.query.item as string || "Fortnite - Standard Founder's Pack";
     try {
       const img = await generateXboxReceipt({ date, amount, email, itemName });
-      res.set('Content-Type', 'image/png');
-      res.set('Content-Disposition', 'inline; filename="receipt.png"');
-      res.send(img);
+
+      // Save to disk with a unique filename
+      const filename = `receipt_${randomBytes(8).toString('hex')}.png`;
+      const filePath = path.join(RECEIPTS_DIR, filename);
+      fs.writeFileSync(filePath, img);
+
+      // Delete after 10 minutes to avoid build-up
+      setTimeout(() => { try { fs.unlinkSync(filePath); } catch {} }, 10 * 60 * 1000);
+
+      // Build the public URL — works for both dev Replit URL and production
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const imageUrl = `${protocol}://${host}/receipts/${filename}`;
+
+      res.type('text/plain').send(imageUrl);
     } catch (err) {
       res.status(400).type('text/plain').send('❌ Error generating receipt. Check date format (YYYY-MM-DD).');
     }
