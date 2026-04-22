@@ -8,6 +8,40 @@ import { randomBytes } from 'crypto';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages] });
 
+// Exported so routes.ts can DM the owner when a BotGhost /buy notify fires
+export async function dmOwner(embedData: { title: string; description: string; fields: { name: string; value: string; inline?: boolean }[] }) {
+  const ownerId = process.env.OWNER_ID;
+  if (!ownerId) return;
+  try {
+    const owner = await client.users.fetch(ownerId);
+    const embed = new EmbedBuilder()
+      .setColor(0xF7931A)
+      .setTitle(embedData.title)
+      .setDescription(embedData.description)
+      .addFields(embedData.fields)
+      .setTimestamp()
+      .setFooter({ text: 'Galaxy Bot • Verify on blockchain before granting access' });
+    await owner.send({ embeds: [embed] });
+  } catch (err) {
+    console.error('dmOwner error:', err);
+  }
+}
+
+// Exported so routes.ts can assign the bot access role after owner confirms payment
+export async function grantBotRole(guildId: string, userId: string): Promise<boolean> {
+  const roleId = process.env.BOT_ACCESS_ROLE_ID;
+  if (!roleId) return false;
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    const member = await guild.members.fetch(userId);
+    await member.roles.add(roleId);
+    return true;
+  } catch (err) {
+    console.error('grantBotRole error:', err);
+    return false;
+  }
+}
+
 async function generateAndGrantKey(userId: number, discordUser: any, type: string) {
   const keyStr = `GALAXY-${type.toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`;
   const newKey = await storage.createKey({

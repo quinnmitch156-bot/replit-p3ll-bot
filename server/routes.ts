@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot } from "./bot";
+import { startBot, dmOwner } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 
@@ -247,6 +247,70 @@ export async function registerRoutes(
     await storage.submitResolverEntry(gamertag, ip, 'discord_user', 'manual');
     res.type('text/plain').send(`✅ Saved: ${gamertag} → ${ip} added to Galaxy DB`);
   });
+
+  // ─── BotGhost /buy endpoints ────────────────────────────────────────────────
+
+  const BUY_PLANS: Record<string, { label: string; usd: number; btc: string; type: string }> = {
+    monthly:       { label: '1 Month Access',       usd: 20, btc: '0.00020', type: 'monthly' },
+    lifetime:      { label: 'Lifetime Access',       usd: 35, btc: '0.00035', type: 'lifetime' },
+    lifetime_guide:{ label: 'Lifetime Access + Guide', usd: 45, btc: '0.00045', type: 'lifetime' },
+  };
+  const BTC_ADDRESS = 'bc1qlx7wdngc04vgdup90mh7rdd7x7u50mcj9vt5qx';
+
+  // Step 1 — return payment details for the embed
+  // BotGhost: GET /api/buy/details?plan={option_plan}&key=YOUR_API_KEY
+  app.get('/api/buy/details', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const plan = (req.query.plan as string || '').toLowerCase().replace(/\s+/g, '_');
+    const p = BUY_PLANS[plan];
+    if (!p) {
+      return res.json({
+        found: false,
+        message: '❌ Invalid plan. Choose: `monthly`, `lifetime`, or `lifetime_guide`',
+        plan: null, usd: null, btc: null, address: null,
+      });
+    }
+    res.json({
+      found: true,
+      plan: p.label,
+      usd: `$${p.usd}.00`,
+      btc: `${p.btc} BTC`,
+      address: BTC_ADDRESS,
+      instructions: `Send exactly **${p.btc} BTC** to the address below, then run **/paid** to notify the owner.`,
+      message: `✅ Payment details for **${p.label}**`,
+    });
+  });
+
+  // Step 2 — user claims they've paid; DMs the owner
+  // BotGhost: GET /api/buy/notify?plan={option_plan}&discord_id={user_id}&tag={username}&key=YOUR_API_KEY
+  app.get('/api/buy/notify', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const plan  = (req.query.plan as string || '').toLowerCase().replace(/\s+/g, '_');
+    const discordId = req.query.discord_id as string || 'unknown';
+    const tag   = req.query.tag as string || 'unknown';
+    const p = BUY_PLANS[plan];
+    const planLabel = p ? p.label : plan;
+
+    await dmOwner({
+      title: '💰 New Bitcoin Payment Claim',
+      description: 'A user has claimed they sent a Bitcoin payment and is awaiting access.',
+      fields: [
+        { name: 'User', value: `${tag} (<@${discordId}>)`, inline: true },
+        { name: 'User ID', value: `\`${discordId}\``, inline: true },
+        { name: 'Plan', value: `**${planLabel}**`, inline: true },
+        { name: 'BTC Address', value: `\`${BTC_ADDRESS}\``, inline: false },
+        { name: 'Action', value: `Check the blockchain, then run \`/giveaccess\` to grant access.`, inline: false },
+      ],
+    });
+
+    res.json({
+      message: `✅ Your payment claim for **${planLabel}** has been submitted! The owner will verify your transaction and grant access shortly (usually 5–15 min).`,
+      plan: planLabel,
+      discord_id: discordId,
+    });
+  });
+
+  // ─── End BotGhost /buy endpoints ────────────────────────────────────────────
 
   // Xbox IP Resolver — JSON fields for BotGhost embed
   // BotGhost: GET /api/xbox-resolve/{gamertag}?key=YOUR_API_KEY
