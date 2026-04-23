@@ -70,11 +70,8 @@ export async function generateXboxReceipt(opts: ReceiptOptions): Promise<Buffer>
   try {
     const thumbPath = path.resolve(process.cwd(), 'public/assets/fortnite_thumb.png');
     const thumbImg = await loadImage(thumbPath);
-    ctx.drawImage(thumbImg, ML, thumbY, thumbSize, thumbSize);
-    // thin border
-    ctx.strokeStyle = '#cccccc';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(ML, thumbY, thumbSize, thumbSize);
+    // Draw image exactly into the box — no gap, no border
+    ctx.drawImage(thumbImg, 0, 0, thumbImg.width, thumbImg.height, ML, thumbY, thumbSize, thumbSize);
   } catch {
     // fallback: dark blue placeholder
     ctx.fillStyle = '#1b3c5c';
