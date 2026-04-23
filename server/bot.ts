@@ -262,14 +262,14 @@ export async function startBot() {
 
         const dateInput = new TextInputBuilder()
           .setCustomId('receipt_date')
-          .setLabel('Date (YYYY-MM-DD)')
+          .setLabel('Date')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('e.g. 2001-02-11')
+          .setPlaceholder('e.g. Monday, July 15, 2007')
           .setRequired(true);
 
         const amountInput = new TextInputBuilder()
           .setCustomId('receipt_amount')
-          .setLabel('Amount (Without Currency Symbol)')
+          .setLabel('Amount')
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('e.g. 39.99')
           .setRequired(true);
@@ -1768,7 +1768,7 @@ Thank you for your help, I hope I will hear from you soon.`;
           await interaction.editReply({ content: '', files: [attachment] });
         } catch (err) {
           console.error('xbox_receipt_modal error:', err);
-          await interaction.editReply({ content: '❌ Failed to generate receipt. Make sure your date is in YYYY-MM-DD format.' });
+          await interaction.editReply({ content: '❌ Failed to generate receipt. Please check your inputs and try again.' });
         }
       }
     }

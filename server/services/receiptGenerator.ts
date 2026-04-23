@@ -1,78 +1,16 @@
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas';
 import { randomInt } from 'crypto';
+import path from 'path';
 
 // Register DejaVu Sans for clean receipt rendering
 GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'Receipt');
 GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'ReceiptBold');
 
 export interface ReceiptOptions {
-  date: string;       // YYYY-MM-DD
-  amount: string;     // e.g. "39.99"
+  date: string;     // Free-form, e.g. "Monday, July 15, 2007"
+  amount: string;   // e.g. "39.99" or "$39.99"
   email: string;
   itemName: string;
-}
-
-function formatDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-');
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const d = new Date(`${year}-${month}-${day}T12:00:00Z`);
-  return `${days[d.getUTCDay()]}, ${months[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
-}
-
-function drawFortniteThumb(ctx: any, x: number, y: number, size: number) {
-  // Sky gradient (top to bottom: light blue → darker blue)
-  const skyGrad = ctx.createLinearGradient(x, y, x, y + size * 0.6);
-  skyGrad.addColorStop(0, '#6bb8d4');
-  skyGrad.addColorStop(1, '#2c7fa8');
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(x, y, size, size * 0.6);
-
-  // Ground (dark teal-blue)
-  const groundGrad = ctx.createLinearGradient(x, y + size * 0.6, x, y + size);
-  groundGrad.addColorStop(0, '#1b5e7d');
-  groundGrad.addColorStop(1, '#0d3349');
-  ctx.fillStyle = groundGrad;
-  ctx.fillRect(x, y + size * 0.6, size, size * 0.4);
-
-  // Storm circle / vortex in the sky (purple/dark)
-  ctx.fillStyle = 'rgba(80, 20, 120, 0.55)';
-  ctx.beginPath();
-  ctx.arc(x + size * 0.75, y + size * 0.22, size * 0.28, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Inner storm
-  ctx.fillStyle = 'rgba(50, 10, 80, 0.7)';
-  ctx.beginPath();
-  ctx.arc(x + size * 0.75, y + size * 0.22, size * 0.14, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Simple figure silhouette (character)
-  ctx.fillStyle = '#0d2030';
-  const cx = x + size * 0.3, cy = y + size * 0.68;
-  // body
-  ctx.fillRect(cx - 4, cy - 10, 8, 14);
-  // head
-  ctx.beginPath();
-  ctx.arc(cx, cy - 14, 5, 0, Math.PI * 2);
-  ctx.fill();
-  // legs
-  ctx.fillRect(cx - 5, cy + 3, 4, 8);
-  ctx.fillRect(cx + 1, cy + 3, 4, 8);
-
-  // "FORTNITE" label at top of thumbnail
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(x, y, size, 14);
-  ctx.fillStyle = '#f5c842';
-  ctx.font = `${Math.round(size * 0.14)}px ReceiptBold`;
-  ctx.textAlign = 'center';
-  ctx.fillText('FORTNITE', x + size / 2, y + 11);
-  ctx.textAlign = 'left';
-
-  // thin border
-  ctx.strokeStyle = '#c0c0c0';
-  ctx.lineWidth = 0.5;
-  ctx.strokeRect(x, y, size, size);
 }
 
 export async function generateXboxReceipt(opts: ReceiptOptions): Promise<Buffer> {
@@ -82,23 +20,25 @@ export async function generateXboxReceipt(opts: ReceiptOptions): Promise<Buffer>
   const ctx = canvas.getContext('2d');
 
   const orderNum = String(randomInt(1000000000, 9999999999));
-  const amt = parseFloat(opts.amount).toFixed(2);
-  const dateLabel = formatDate(opts.date);
-  const ML = 40;  // margin left
-  const MR = W - 40; // margin right (580)
 
-  // ── White background ─────────────────────────────────────────────────────
+  // Strip leading $ and any spaces from amount, then format to 2dp
+  const rawAmt = opts.amount.replace(/[^0-9.]/g, '');
+  const amt = parseFloat(rawAmt || '0').toFixed(2);
+
+  const dateLabel = opts.date.trim();
+  const ML = 40;
+  const MR = W - 40;
+
+  // ── White background ──────────────────────────────────────────────────────
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
   // ── Microsoft logo ────────────────────────────────────────────────────────
-  // 4 coloured squares (11px each, 2px gap)
   const lx = ML, ly = 30, sq = 11, gap = 2;
-  ctx.fillStyle = '#F25022'; ctx.fillRect(lx,          ly,          sq, sq);
-  ctx.fillStyle = '#7FBA00'; ctx.fillRect(lx + sq + gap, ly,          sq, sq);
-  ctx.fillStyle = '#00A4EF'; ctx.fillRect(lx,          ly + sq + gap, sq, sq);
+  ctx.fillStyle = '#F25022'; ctx.fillRect(lx,           ly,           sq, sq);
+  ctx.fillStyle = '#7FBA00'; ctx.fillRect(lx + sq + gap, ly,           sq, sq);
+  ctx.fillStyle = '#00A4EF'; ctx.fillRect(lx,           ly + sq + gap, sq, sq);
   ctx.fillStyle = '#FFB900'; ctx.fillRect(lx + sq + gap, ly + sq + gap, sq, sq);
-  // "Microsoft" text
   ctx.fillStyle = '#737373';
   ctx.font = '15px Receipt';
   ctx.fillText('Microsoft', lx + sq * 2 + gap + 9, ly + sq + gap / 2 + 5);
@@ -125,12 +65,31 @@ export async function generateXboxReceipt(opts: ReceiptOptions): Promise<Buffer>
   ctx.fillStyle = '#d8d8d8';
   ctx.fillRect(ML, 207, MR - ML, 1);
 
-  // ── Product row ───────────────────────────────────────────────────────────
+  // ── Fortnite thumbnail ───────────────────────────────────────────────────
   const thumbY = 220, thumbSize = 63;
-  drawFortniteThumb(ctx, ML, thumbY, thumbSize);
+  try {
+    const thumbPath = path.resolve(process.cwd(), 'public/assets/fortnite_thumb.png');
+    const thumbImg = await loadImage(thumbPath);
+    ctx.drawImage(thumbImg, ML, thumbY, thumbSize, thumbSize);
+    // thin border
+    ctx.strokeStyle = '#cccccc';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(ML, thumbY, thumbSize, thumbSize);
+  } catch {
+    // fallback: dark blue placeholder
+    ctx.fillStyle = '#1b3c5c';
+    ctx.fillRect(ML, thumbY, thumbSize, thumbSize);
+    ctx.fillStyle = '#f5c842';
+    ctx.font = '8px ReceiptBold';
+    ctx.textAlign = 'center';
+    ctx.fillText('FORTNITE', ML + thumbSize / 2, thumbY + thumbSize / 2);
+    ctx.textAlign = 'left';
+  }
 
-  // Product name (handle long names with optional second line)
+  // ── Product name + qty ────────────────────────────────────────────────────
   const nameX = ML + thumbSize + 14;
+
+  // Word-wrap item name across two lines (~36 chars per line)
   const words = opts.itemName.split(' ');
   let line1 = '', line2 = '';
   let used = 0;
@@ -148,7 +107,7 @@ export async function generateXboxReceipt(opts: ReceiptOptions): Promise<Buffer>
   ctx.font = '13px Receipt';
   ctx.fillText('Quantity 1', nameX, line2 ? thumbY + 56 : thumbY + 38);
 
-  // Price (right-aligned at product row level)
+  // Price right-aligned at product row level
   ctx.fillStyle = '#1a1a1a';
   ctx.font = '14px Receipt';
   const priceStr = `$${amt}`;
@@ -210,30 +169,29 @@ export async function generateXboxReceipt(opts: ReceiptOptions): Promise<Buffer>
   ctx.fillStyle = '#d8d8d8';
   ctx.fillRect(ML, 612, MR - ML, 1);
 
-  // ── "Microsoft: Get organized!" + "Set up a family calendar" ─────────────
+  // ── "Microsoft: Get organized!" ───────────────────────────────────────────
   ctx.fillStyle = '#1a1a1a';
   ctx.font = '12px Receipt';
   ctx.fillText('Microsoft: Get organized!', ML, 633);
   ctx.fillStyle = '#0067b8';
-  ctx.font = '12px Receipt';
   const calText = 'Set up a family calendar';
   ctx.fillText(calText, MR - ctx.measureText(calText).width, 633);
 
-  // ── Always know heading ───────────────────────────────────────────────────
+  // ── Always know heading (centered) ────────────────────────────────────────
   ctx.fillStyle = '#1a1a1a';
   ctx.font = '19px ReceiptBold';
-  const alwaysText = 'Always know what\'s happening';
+  const alwaysText = "Always know what's happening";
   ctx.fillText(alwaysText, (W - ctx.measureText(alwaysText).width) / 2, 665);
 
-  // ── Body text (centered, may need two lines) ──────────────────────────────
+  // ── Body text (centered) ──────────────────────────────────────────────────
   ctx.fillStyle = '#444444';
   ctx.font = '12.5px Receipt';
-  const bodyLine1 = "Keep track of your family's schedule \u2014 events, appointments, vacations \u2014";
+  const bodyLine1 = "Keep track of your family\u2019s schedule \u2013 events, appointments, vacations \u2013";
   const bodyLine2 = 'in one place that everyone can see.';
   ctx.fillText(bodyLine1, (W - ctx.measureText(bodyLine1).width) / 2, 690);
   ctx.fillText(bodyLine2, (W - ctx.measureText(bodyLine2).width) / 2, 708);
 
-  // ── Learn how ─────────────────────────────────────────────────────────────
+  // ── Learn how (centered, blue) ────────────────────────────────────────────
   ctx.fillStyle = '#0067b8';
   ctx.font = '12px Receipt';
   const learnText = 'Learn how';
