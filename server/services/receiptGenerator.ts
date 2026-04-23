@@ -9,7 +9,6 @@ GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.t
 export interface ReceiptOptions {
   date: string;     // Free-form, e.g. "Monday, July 15, 2007"
   amount: string;   // e.g. "39.99" or "$39.99"
-  email: string;
   itemName: string;
 }
 

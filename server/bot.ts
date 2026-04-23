@@ -274,13 +274,6 @@ export async function startBot() {
           .setPlaceholder('e.g. 39.99')
           .setRequired(true);
 
-        const emailInput = new TextInputBuilder()
-          .setCustomId('receipt_email')
-          .setLabel('Your Email')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('e.g. example@outlook.com')
-          .setRequired(true);
-
         const itemInput = new TextInputBuilder()
           .setCustomId('receipt_item')
           .setLabel('Item Name')
@@ -292,7 +285,6 @@ export async function startBot() {
         modal.addComponents(
           new ActionRowBuilder<TextInputBuilder>().addComponents(dateInput),
           new ActionRowBuilder<TextInputBuilder>().addComponents(amountInput),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(emailInput),
           new ActionRowBuilder<TextInputBuilder>().addComponents(itemInput),
         );
 
@@ -1759,10 +1751,9 @@ Thank you for your help, I hope I will hear from you soon.`;
         try {
           const date     = interaction.fields.getTextInputValue('receipt_date').trim();
           const amount   = interaction.fields.getTextInputValue('receipt_amount').trim();
-          const email    = interaction.fields.getTextInputValue('receipt_email').trim();
           const itemName = interaction.fields.getTextInputValue('receipt_item').trim();
 
-          const imgBuffer = await generateXboxReceipt({ date, amount, email, itemName });
+          const imgBuffer = await generateXboxReceipt({ date, amount, itemName });
           const attachment = new AttachmentBuilder(imgBuffer, { name: 'receipt.png' });
 
           await interaction.editReply({ content: '', files: [attachment] });

@@ -321,17 +321,15 @@ export async function registerRoutes(
   });
 
   // Xbox Receipt — generates a Microsoft-style receipt image and returns a hosted URL
-  // BotGhost: GET /api/xbox-receipt?date=2024-03-15&amount=39.99&email=x@x.com&item=Fortnite&key=...
-  // Response: plain-text URL like https://your-replit.dev/receipts/abc123.png
-  // Post that URL as a Discord message — Discord will auto-embed the image
+  // BotGhost: GET /api/xbox-receipt?date=Sunday%2C+February+11%2C+2001&amount=39.99&item=Fortnite&key=...
+  // Response: plain-text URL — post it as a Discord message and Discord will auto-embed the image
   app.get('/api/xbox-receipt', async (req, res) => {
     if (!checkKey(req, res)) return;
-    const date     = req.query.date as string || '2001-01-01';
+    const date     = req.query.date as string || 'Sunday, January 1, 2001';
     const amount   = req.query.amount as string || '0.00';
-    const email    = req.query.email as string || 'user@email.com';
     const itemName = req.query.item as string || "Fortnite - Standard Founder's Pack";
     try {
-      const img = await generateXboxReceipt({ date, amount, email, itemName });
+      const img = await generateXboxReceipt({ date, amount, itemName });
 
       // Save to disk with a unique filename
       const filename = `receipt_${randomBytes(8).toString('hex')}.png`;
