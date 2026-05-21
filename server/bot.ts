@@ -225,6 +225,7 @@ export async function startBot() {
 
   client.on(Events.InteractionCreate, async interaction => {
     if (interaction.isChatInputCommand()) {
+      try {
       let user = await storage.getUserByDiscordId(interaction.user.id);
       if (!user) {
         user = await storage.createUser({
@@ -1612,6 +1613,14 @@ Thank you for your help, I hope I will hear from you soon.`;
 
         default:
           await interaction.reply({ content: 'Unknown command.', ephemeral: false });
+      }
+      } catch (err: any) {
+        console.error(`[Command error] ${interaction.commandName}:`, err);
+        const reply = { content: '❌ An error occurred. Please try again.', ephemeral: false };
+        try {
+          if (interaction.deferred) await interaction.editReply(reply);
+          else if (!interaction.replied) await interaction.reply(reply);
+        } catch {}
       }
     }
 
