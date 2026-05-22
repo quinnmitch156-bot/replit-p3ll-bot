@@ -28,6 +28,45 @@ export async function dmOwner(embedData: { title: string; description: string; f
   }
 }
 
+// DM the owner a payment claim with Grant Key / Reject buttons (used by BotGhost /api/buy/notify)
+export async function dmOwnerPaymentClaim(opts: { discordId: string; tag: string; planType: string; method: string; planLabel: string }) {
+  const ownerId = process.env.OWNER_ID;
+  if (!ownerId) return;
+  try {
+    const owner = await client.users.fetch(ownerId);
+    const methodLabel = opts.method === 'paypal' ? 'PayPal' : 'Bitcoin';
+    const note = `HG-${opts.discordId.slice(-6).toUpperCase()}-${opts.planType.toUpperCase()}`;
+    const embed = new EmbedBuilder()
+      .setColor(0xF7931A)
+      .setTitle(`💰 New ${methodLabel} Payment Claim`)
+      .setDescription('A user has claimed they sent a payment and is awaiting their key.')
+      .addFields(
+        { name: 'User', value: `${opts.tag} (<@${opts.discordId}>)`, inline: true },
+        { name: 'User ID', value: `\`${opts.discordId}\``, inline: true },
+        { name: 'Plan', value: `**${opts.planLabel}**`, inline: true },
+        { name: 'Payment Method', value: `**${methodLabel}**`, inline: true },
+        { name: 'Order Note', value: `\`${note}\``, inline: false },
+        { name: 'Action', value: 'Verify payment, then click **Grant Key** below. A redeem key will be generated and DM\u2019d to the buyer.', inline: false }
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Honor Guard • Verify payment before granting' });
+
+    const grantBtn = new ButtonBuilder()
+      .setCustomId(`grant_key|${opts.discordId}|${opts.planType}`)
+      .setLabel('✅ Grant Key')
+      .setStyle(ButtonStyle.Success);
+    const rejectBtn = new ButtonBuilder()
+      .setCustomId(`reject_payment|${opts.discordId}`)
+      .setLabel('❌ Reject')
+      .setStyle(ButtonStyle.Danger);
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(grantBtn, rejectBtn);
+
+    await owner.send({ embeds: [embed], components: [row] });
+  } catch (err) {
+    console.error('dmOwnerPaymentClaim error:', err);
+  }
+}
+
 // Exported so routes.ts can assign the bot access role after owner confirms payment
 export async function grantBotRole(guildId: string, userId: string): Promise<boolean> {
   const roleId = process.env.BOT_ACCESS_ROLE_ID;

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -266,57 +266,56 @@ export async function registerRoutes(
   };
   const BTC_ADDRESS = 'bc1qlx7wdngc04vgdup90mh7rdd7x7u50mcj9vt5qx';
 
-  // Step 1 — return payment details
-  // BotGhost: GET /api/buy/details/{option_plan}?key=YOUR_API_KEY
+  const PAYPAL_EMAIL = 'federalisgone@gmail.com';
+
+  function buildOrderResponse(plan: string, method: string, discordId: string): string {
+    const p = BUY_PLANS[plan];
+    if (!p) return `❌ Invalid plan "${plan}". Choose: monthly, lifetime, or lifetime_guide`;
+    const m = (method || 'bitcoin').toLowerCase();
+    if (m !== 'paypal' && m !== 'bitcoin') return `❌ Invalid payment method "${method}". Choose: paypal or bitcoin`;
+    const note = `HG-${(discordId || 'XXXXXX').slice(-6).toUpperCase()}-${plan.toUpperCase()}`;
+    if (m === 'paypal') {
+      return `**Complete Your Order | PayPal**\n\n**Plan:** ${p.label}\n**Amount:** $${p.usd}.00 USD\n**PayPal Email:** \`${PAYPAL_EMAIL}\`\n**PayPal Note (REQUIRED):** \`${note}\`\n\n⚠️ Send as **Friends & Family**. Include the note **exactly** as shown.\nAfter payment, click **"I've Paid"** — owner will DM you a key for \`/redeem\`.`;
+    }
+    return `**Complete Your Order | Bitcoin**\n\n**Plan:** ${p.label}\n**Amount:** $${p.usd}.00 USD | ${p.btc} BTC\n**Bitcoin Address:** \`${BTC_ADDRESS}\`\n**Order Note:** \`${note}\`\n\n⚠️ Send **exactly ${p.btc} BTC** to the address above.\nAfter payment, click **"I've Paid"** — owner will DM you a key for \`/redeem\`.`;
+  }
+
+  // Step 1 — return payment details (path param)
+  // BotGhost: GET /api/buy/details/{option_plan}?method={option_payment}&discord_id={user_id}&key=YOUR_API_KEY
   app.get('/api/buy/details/:plan', async (req, res) => {
     if (!checkKey(req, res)) return;
     const plan = (req.params.plan || '').toLowerCase().replace(/\s+/g, '_');
-    const p = BUY_PLANS[plan];
-    if (!p) {
-      return res.type('text/plain').send(`❌ Invalid plan "${req.params.plan}". Choose: monthly, lifetime, or lifetime_guide`);
-    }
-    res.type('text/plain').send(
-      `**Plan:** ${p.label}\n**Price:** $${p.usd}.00 USD | ${p.btc} BTC\n\n**Bitcoin Address:**\n\`${BTC_ADDRESS}\`\n\nSend EXACTLY **${p.btc} BTC** to the address above.\nOnce sent, run **/paid plan:${plan}** to notify the owner.\nAccess is granted after blockchain confirmation (5–15 min).`
-    );
+    const method = (req.query.method as string || 'bitcoin');
+    const discordId = (req.query.discord_id as string || '');
+    res.type('text/plain').send(buildOrderResponse(plan, method, discordId));
   });
 
-  // Also support query string version as fallback
+  // Query string version
+  // BotGhost: GET /api/buy/details?plan={option_plan}&method={option_payment}&discord_id={user_id}&key=YOUR_API_KEY
   app.get('/api/buy/details', async (req, res) => {
     if (!checkKey(req, res)) return;
     const plan = (req.query.plan as string || '').toLowerCase().replace(/\s+/g, '_');
-    const p = BUY_PLANS[plan];
-    if (!p) {
-      return res.type('text/plain').send(`❌ Invalid plan "${req.query.plan}". Choose: monthly, lifetime, or lifetime_guide`);
-    }
-    res.type('text/plain').send(
-      `**Plan:** ${p.label}\n**Price:** $${p.usd}.00 USD | ${p.btc} BTC\n\n**Bitcoin Address:**\n\`${BTC_ADDRESS}\`\n\nSend EXACTLY **${p.btc} BTC** to the address above.\nOnce sent, run **/paid plan:${plan}** to notify the owner.\nAccess is granted after blockchain confirmation (5–15 min).`
-    );
+    const method = (req.query.method as string || 'bitcoin');
+    const discordId = (req.query.discord_id as string || '');
+    res.type('text/plain').send(buildOrderResponse(plan, method, discordId));
   });
 
-  // Step 2 — user claims they've paid; DMs the owner
-  // BotGhost: GET /api/buy/notify?plan={option_plan}&discord_id={user_id}&tag={username}&key=YOUR_API_KEY
+  // Step 2 — user claims they've paid; DMs the owner with Grant Key / Reject buttons
+  // BotGhost: GET /api/buy/notify?plan={option_plan}&method={option_payment}&discord_id={user_id}&tag={user_username}&key=YOUR_API_KEY
   app.get('/api/buy/notify', async (req, res) => {
     if (!checkKey(req, res)) return;
     const plan  = (req.query.plan as string || '').toLowerCase().replace(/\s+/g, '_');
+    const method = ((req.query.method as string) || 'bitcoin').toLowerCase();
     const discordId = req.query.discord_id as string || 'unknown';
     const tag   = req.query.tag as string || 'unknown';
     const p = BUY_PLANS[plan];
     const planLabel = p ? p.label : plan;
+    const methodLabel = method === 'paypal' ? 'PayPal' : 'Bitcoin';
 
-    await dmOwner({
-      title: '💰 New Bitcoin Payment Claim',
-      description: 'A user has claimed they sent a Bitcoin payment and is awaiting access.',
-      fields: [
-        { name: 'User', value: `${tag} (<@${discordId}>)`, inline: true },
-        { name: 'User ID', value: `\`${discordId}\``, inline: true },
-        { name: 'Plan', value: `**${planLabel}**`, inline: true },
-        { name: 'BTC Address', value: `\`${BTC_ADDRESS}\``, inline: false },
-        { name: 'Action', value: `Check the blockchain, then run \`/giveaccess\` to grant access.`, inline: false },
-      ],
-    });
+    await dmOwnerPaymentClaim({ discordId, tag, planType: plan, method, planLabel });
 
     res.type('text/plain').send(
-      `✅ Payment claim submitted for **${planLabel}**!\n\nThe owner will verify your Bitcoin transaction on the blockchain and grant your access shortly (usually 5–15 min).\n\nDo NOT send again — just wait for confirmation.`
+      `✅ ${methodLabel} payment claim submitted for **${planLabel}**!\n\nThe owner will verify your payment and DM you a **redeem key**. Once received, use \`/redeem key:HG-...\` to activate your access.\n\nThis usually takes **5–15 min**. Do NOT send again — just wait for confirmation.`
     );
   });
 
