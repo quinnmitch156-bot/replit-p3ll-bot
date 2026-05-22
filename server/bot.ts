@@ -296,17 +296,16 @@ export async function startBot() {
       if (interaction.commandName === 'buy') {
         try {
           const embed = new EmbedBuilder()
-            .setColor(0xF7931A)
-            .setTitle('🪙 Galaxy Bot — Purchase Access')
-            .setDescription('**What is Galaxy?**\nGalaxy is a powerful Discord bot for OSINT on Epic Games, Xbox, and PSN accounts.\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox & PSN AOV Scripts\n• IP Resolution (Xbox/PSN)\n• Epic/Fortnite Account Lookups\n• OSINT Email, Username & IP\n• 15+ Total Commands\n\n**Select a plan below to get started. Bitcoin only.**')
-            .setThumbnail(interaction.client.user?.displayAvatarURL() || null)
-            .setFooter({ text: 'Galaxy Bot • Powered by Bitcoin payments' });
+            .setColor(0x22c55e)
+            .setTitle('Honor Guard Bot Key')
+            .setDescription('**"What is Honor Guard?"**\nHonor Guard is a discord bot used to gather information on Epic Games, Xbox & PSN accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Honor Guard makes pulling easy and fast!')
+            .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
 
           const row = new ActionRowBuilder<StringSelectMenuBuilder>()
             .addComponents(
               new StringSelectMenuBuilder()
                 .setCustomId('buy_select_plan')
-                .setPlaceholder('🛒 Choose a plan...')
+                .setPlaceholder('Choose a key...')
                 .addOptions([
                   { label: '1 Month Access — $20', value: 'monthly|20|0.00020', emoji: '📅', description: 'Full access for 30 days' },
                   { label: 'Lifetime Access — $35', value: 'lifetime|35|0.00035', emoji: '♾️', description: 'One-time payment, permanent access' },
@@ -1642,22 +1641,67 @@ Thank you for your help, I hope I will hear from you soon.`;
           : planType === 'lifetime' ? 'Lifetime Access'
           : 'Lifetime Access + Guide';
 
-        const BTC_ADDRESS = 'bc1qlx7wdngc04vgdup90mh7rdd7x7u50mcj9vt5qx';
+        const methodEmbed = new EmbedBuilder()
+          .setColor(0x22c55e)
+          .setTitle('Select a payment method')
+          .setDescription(`You selected **${planLabel}** — **$${usdAmount}.00 USD**\n\nChoose how you'd like to pay below.`);
 
-        const payEmbed = new EmbedBuilder()
-          .setColor(0xF7931A)
-          .setTitle('🪙 Bitcoin Payment Details')
-          .setDescription(`You selected **${planLabel}**.\n\nSend **exactly** the amount below to the Bitcoin address provided. Once sent, click **"I've Paid"** and the owner will verify and grant your access.`)
-          .addFields(
-            { name: '💰 USD Amount', value: `**$${usdAmount}.00**`, inline: true },
-            { name: '₿ BTC Amount', value: `**${btcAmount} BTC**`, inline: true },
-            { name: '📋 Bitcoin Address', value: `\`\`\`${BTC_ADDRESS}\`\`\``, inline: false },
-            { name: '⚠️ Important', value: 'Send the **exact** BTC amount shown. After payment, click the button below. Your access will be granted once the owner confirms receipt.', inline: false }
-          )
-          .setFooter({ text: 'Galaxy Bot • BTC payments are final and non-refundable' });
+        const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+          .addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId(`buy_payment_method|${planType}|${usdAmount}|${btcAmount}`)
+              .setPlaceholder('Select a payment method...')
+              .addOptions([
+                { label: 'PayPal', value: 'paypal', emoji: '💳', description: 'Pay with PayPal (Friends & Family)' },
+                { label: 'Bitcoin', value: 'bitcoin', emoji: '🪙', description: 'Pay with BTC' },
+              ])
+          );
+
+        await interaction.reply({ embeds: [methodEmbed], components: [row] });
+        return;
+      }
+
+      if (interaction.customId.startsWith('buy_payment_method|')) {
+        const [, planType, usdAmount, btcAmount] = interaction.customId.split('|');
+        const method = interaction.values[0]; // "paypal" or "bitcoin"
+
+        const planLabel = planType === 'monthly' ? '1 Month Access'
+          : planType === 'lifetime' ? 'Lifetime Access'
+          : 'Lifetime Access + Guide';
+
+        const PAYPAL_EMAIL = 'federalisgone@gmail.com';
+        const BTC_ADDRESS = 'bc1qlx7wdngc04vgdup90mh7rdd7x7u50mcj9vt5qx';
+        const orderNote = `HG-${interaction.user.id.slice(-6).toUpperCase()}-${planType.toUpperCase()}`;
+
+        let payEmbed: EmbedBuilder;
+        if (method === 'paypal') {
+          payEmbed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle('Complete Your Order | PayPal')
+            .addFields(
+              { name: 'PayPal Note', value: `**NOTE IS REQUIRED**\n\`${orderNote}\``, inline: false },
+              { name: 'Amount', value: `\`$${usdAmount}.00 USD\``, inline: false },
+              { name: 'PayPal Email', value: `\`${PAYPAL_EMAIL}\``, inline: false },
+              { name: 'Plan', value: `**${planLabel}**`, inline: false },
+              { name: '⚠️ Important', value: 'Send as **Friends & Family**. Include the note **exactly** as shown. After payment, click **"I\'ve Paid"** below.', inline: false }
+            )
+            .setFooter({ text: 'Honor Guard • Payments are final and non-refundable' });
+        } else {
+          payEmbed = new EmbedBuilder()
+            .setColor(0xF7931A)
+            .setTitle('Complete Your Order | Bitcoin')
+            .addFields(
+              { name: 'Order Note', value: `\`${orderNote}\``, inline: false },
+              { name: 'Amount', value: `**$${usdAmount}.00 USD** \\| **${btcAmount} BTC**`, inline: false },
+              { name: 'Bitcoin Address', value: `\`${BTC_ADDRESS}\``, inline: false },
+              { name: 'Plan', value: `**${planLabel}**`, inline: false },
+              { name: '⚠️ Important', value: `Send **exactly ${btcAmount} BTC** to the address above. After payment, click **"I've Paid"** below.`, inline: false }
+            )
+            .setFooter({ text: 'Honor Guard • BTC payments are final and non-refundable' });
+        }
 
         const paidButton = new ButtonBuilder()
-          .setCustomId(`btc_paid_${planType}`)
+          .setCustomId(`paid|${planType}|${method}`)
           .setLabel('✅ I\'ve Paid')
           .setStyle(ButtonStyle.Success);
 
@@ -1668,30 +1712,44 @@ Thank you for your help, I hope I will hear from you soon.`;
     }
 
     if (interaction.isButton()) {
-      if (interaction.customId.startsWith('btc_paid_')) {
-        const planType = interaction.customId.replace('btc_paid_', '');
+      if (interaction.customId.startsWith('paid|')) {
+        const [, planType, method] = interaction.customId.split('|');
         const planLabel = planType === 'monthly' ? '1 Month Access'
           : planType === 'lifetime' ? 'Lifetime Access'
           : 'Lifetime Access + Guide';
+        const methodLabel = method === 'paypal' ? 'PayPal' : 'Bitcoin';
 
-        // DM the owner to verify
+        // DM the owner with a Grant button
         const ownerId = process.env.OWNER_ID;
         if (ownerId) {
           try {
             const ownerUser = await interaction.client.users.fetch(ownerId);
             const ownerEmbed = new EmbedBuilder()
               .setColor(0xF7931A)
-              .setTitle('💰 New Bitcoin Payment Claim')
-              .setDescription(`A user has claimed they sent a Bitcoin payment and is awaiting access.`)
+              .setTitle(`💰 New ${methodLabel} Payment Claim`)
+              .setDescription(`A user has claimed they sent a payment and is awaiting their key.`)
               .addFields(
                 { name: 'User', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
                 { name: 'User ID', value: `\`${interaction.user.id}\``, inline: true },
                 { name: 'Plan', value: `**${planLabel}**`, inline: true },
-                { name: 'Action', value: `Run \`/giveaccess user:${interaction.user.tag} tier:${planType === 'monthly' ? 'monthly' : 'lifetime'}\` after confirming payment on the blockchain.`, inline: false }
+                { name: 'Payment Method', value: `**${methodLabel}**`, inline: true },
+                { name: 'Order Note', value: `\`HG-${interaction.user.id.slice(-6).toUpperCase()}-${planType.toUpperCase()}\``, inline: false },
+                { name: 'Action', value: `Verify the payment, then click **Grant Key** below. A redeem key will be generated and DM\u2019d to the buyer.`, inline: false }
               )
-              .setFooter({ text: 'Galaxy Bot • Verify on blockchain before granting access' })
+              .setFooter({ text: 'Honor Guard • Verify payment before granting' })
               .setTimestamp();
-            await ownerUser.send({ embeds: [ownerEmbed] });
+
+            const grantBtn = new ButtonBuilder()
+              .setCustomId(`grant_key|${interaction.user.id}|${planType}`)
+              .setLabel('✅ Grant Key')
+              .setStyle(ButtonStyle.Success);
+            const rejectBtn = new ButtonBuilder()
+              .setCustomId(`reject_payment|${interaction.user.id}`)
+              .setLabel('❌ Reject')
+              .setStyle(ButtonStyle.Danger);
+            const ownerRow = new ActionRowBuilder<ButtonBuilder>().addComponents(grantBtn, rejectBtn);
+
+            await ownerUser.send({ embeds: [ownerEmbed], components: [ownerRow] });
           } catch (err) {
             console.error('Could not DM owner:', err);
           }
@@ -1702,55 +1760,89 @@ Thank you for your help, I hope I will hear from you soon.`;
             new EmbedBuilder()
               .setColor(0x22c55e)
               .setTitle('✅ Payment Claim Submitted')
-              .setDescription(`Your payment claim for **${planLabel}** has been submitted.\n\nThe owner will verify your transaction on the blockchain and grant your access shortly. This usually takes **5–15 minutes**.\n\nIf you have any issues, please contact the server owner directly.`)
-              .setFooter({ text: 'Galaxy Bot • Do not send again — wait for confirmation' })
+              .setDescription(`Your **${methodLabel}** payment claim for **${planLabel}** has been submitted.\n\nThe owner will verify your payment and DM you a **redeem key**. Once received, use \`/redeem [key]\` to activate your access.\n\nThis usually takes **5–15 minutes**.`)
+              .setFooter({ text: 'Honor Guard • Do not send again — wait for confirmation' })
           ],
           ephemeral: true
         });
+        return;
       }
 
-      // Grant access button (owner panel)
-      if (interaction.customId.startsWith('grant_access_')) {
+      // Owner clicks Grant Key → generate key + DM buyer
+      if (interaction.customId.startsWith('grant_key|')) {
         const ownerId = process.env.OWNER_ID;
-        const isOwner = interaction.user.id === ownerId;
-        if (!isOwner) {
+        if (interaction.user.id !== ownerId) {
           await interaction.reply({ content: 'Only the owner can use this button.', ephemeral: true });
           return;
         }
-        const [, , , targetUserId, planType] = interaction.customId.split('_');
-        let dbUser = await storage.getUserByDiscordId(targetUserId);
-        if (!dbUser) {
-          dbUser = await storage.createUser({ discordId: targetUserId, username: targetUserId, role: 'user', subscriptionTier: null, subscriptionExpiresAt: null });
-        }
+        const [, targetUserId, planType] = interaction.customId.split('|');
+        const keyType = planType === 'monthly' ? 'monthly' : 'lifetime';
+        const planLabel = planType === 'monthly' ? '1 Month Access'
+          : planType === 'lifetime' ? 'Lifetime Access'
+          : 'Lifetime Access + Guide';
 
-        const now = new Date();
-        const expiresAt = planType === 'monthly' ? new Date(now.setMonth(now.getMonth() + 1)) : null;
-        await storage.updateUserSubscription(dbUser.id, planType === 'monthly' ? 'monthly' : 'lifetime', expiresAt);
+        // Generate a redeem key
+        const keyStr = `HG-${randomBytes(8).toString('hex').toUpperCase()}`;
+        await storage.createKey({ key: keyStr, type: keyType, status: 'active', createdBy: null });
 
-        const roleId = process.env.BOT_ACCESS_ROLE_ID;
-        if (roleId && interaction.guild) {
-          try {
-            const member = await interaction.guild.members.fetch(targetUserId);
-            await member.roles.add(roleId);
-          } catch (err) {
-            console.error('Could not add role:', err);
-          }
-        }
-
+        // DM the buyer the key
+        let dmStatus = '✅ Key DM\'d to buyer.';
         try {
-          const targetDiscordUser = await interaction.client.users.fetch(targetUserId);
-          await targetDiscordUser.send({
+          const buyer = await interaction.client.users.fetch(targetUserId);
+          await buyer.send({
             embeds: [
               new EmbedBuilder()
                 .setColor(0x22c55e)
-                .setTitle('🎉 Access Granted!')
-                .setDescription(`Your Bitcoin payment has been verified and your **${planType === 'monthly' ? '1 Month Access' : 'Lifetime Access'}** to Galaxy Bot has been activated!`)
-                .setFooter({ text: 'Galaxy Bot • Thank you for your purchase' })
+                .setTitle('🎉 Payment Confirmed — Your Key')
+                .setDescription(`Your payment for **${planLabel}** has been verified!\n\n**Your redeem key:**\n\`\`\`${keyStr}\`\`\`\nActivate it by running:\n\`/redeem key:${keyStr}\`\n\nKeep this key safe — it can only be redeemed once.`)
+                .setFooter({ text: 'Honor Guard • Thank you for your purchase' })
             ]
           });
-        } catch (_) {}
+        } catch (e) {
+          dmStatus = '⚠️ Could not DM buyer (DMs closed). Key generated below — send it to them manually.';
+        }
 
-        await interaction.reply({ content: `✅ Access granted to <@${targetUserId}> (${planType}).`, ephemeral: true });
+        await interaction.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x22c55e)
+              .setTitle('✅ Key Granted')
+              .setDescription(`${dmStatus}\n\n**Key:** \`${keyStr}\`\n**Buyer:** <@${targetUserId}>\n**Plan:** ${planLabel}`)
+              .setFooter({ text: 'Honor Guard' })
+          ],
+          components: []
+        });
+        return;
+      }
+
+      if (interaction.customId.startsWith('reject_payment|')) {
+        const ownerId = process.env.OWNER_ID;
+        if (interaction.user.id !== ownerId) {
+          await interaction.reply({ content: 'Only the owner can use this button.', ephemeral: true });
+          return;
+        }
+        const [, targetUserId] = interaction.customId.split('|');
+        try {
+          const buyer = await interaction.client.users.fetch(targetUserId);
+          await buyer.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle('❌ Payment Not Verified')
+                .setDescription('Your recent payment claim could not be verified. Please contact the owner directly if you believe this is a mistake.')
+            ]
+          });
+        } catch {}
+        await interaction.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xff0000)
+              .setTitle('❌ Payment Rejected')
+              .setDescription(`<@${targetUserId}> has been notified.`)
+          ],
+          components: []
+        });
+        return;
       }
     }
 
