@@ -241,7 +241,22 @@ const commands = [
     .setName('name_gen')
     .setDescription('Use a generated code to get a Fortnite username + IP lookup')
     .addStringOption(o => o.setName('code').setDescription('Your 10-character gen code').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('translate')
+    .setDescription('Translate any language to English')
+    .addStringOption(o => o.setName('text').setDescription('Text to translate').setRequired(true)),
 ];
+
+export async function translateToEnglish(text: string): Promise<{ translated: string; sourceLang: string }> {
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Translate API ${res.status}`);
+  const data: any = await res.json();
+  const translated = (data?.[0] || []).map((seg: any) => seg?.[0] || '').join('').trim();
+  const sourceLang = data?.[2] || 'auto';
+  if (!translated) throw new Error('Empty translation');
+  return { translated, sourceLang };
+}
 
 export async function startBot() {
   if (!process.env.DISCORD_TOKEN || !process.env.DISCORD_CLIENT_ID) {
@@ -1646,6 +1661,27 @@ Thank you for your help, I hope I will hear from you soon.`;
               `Example header: \`Bearer ${liveToken}\`\n\n` +
               `⚠️ This expires in ~8h. Run \`/get_epic_token\` again to get a fresh one.`
           });
+          break;
+        }
+
+        case 'translate': {
+          await interaction.deferReply();
+          const text = interaction.options.getString('text', true);
+          try {
+            const { translated, sourceLang } = await translateToEnglish(text);
+            const tEmbed = new EmbedBuilder()
+              .setColor(0x22c55e)
+              .setTitle('🌐 Translation → English')
+              .addFields(
+                { name: `Original (${sourceLang})`, value: text.slice(0, 1024) },
+                { name: 'English', value: translated.slice(0, 1024) }
+              )
+              .setFooter({ text: 'Honor Guard • Translate' })
+              .setTimestamp();
+            await interaction.editReply({ embeds: [tEmbed] });
+          } catch (err) {
+            await interaction.editReply({ content: '❌ Translation failed. Try again.' });
+          }
           break;
         }
 

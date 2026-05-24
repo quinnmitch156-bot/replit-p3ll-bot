@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -317,6 +317,23 @@ export async function registerRoutes(
     res.type('text/plain').send(
       `✅ ${methodLabel} payment claim submitted for **${planLabel}**!\n\nThe owner will verify your payment and DM you a **redeem key**. Once received, use \`/redeem key:HG-...\` to activate your access.\n\nThis usually takes **5–15 min**. Do NOT send again — just wait for confirmation.`
     );
+  });
+
+  // Translate — translates any language to English
+  // BotGhost: GET /api/translate?text={option_text}&key=YOUR_API_KEY
+  // Response: plain text — "🌐 [SRC → EN]\nOriginal: ...\nEnglish: ..."
+  app.get('/api/translate', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const text = (req.query.text as string || '').trim();
+    if (!text) return res.type('text/plain').send('❌ Missing `text` query param.');
+    try {
+      const { translated, sourceLang } = await translateToEnglish(text);
+      res.type('text/plain').send(
+        `🌐 **Translation** (${sourceLang} → en)\n\n**Original:** ${text}\n**English:** ${translated}`
+      );
+    } catch (err) {
+      res.type('text/plain').send('❌ Translation failed. Try again.');
+    }
   });
 
   // Xbox Receipt — generates a Microsoft-style receipt image and returns a hosted URL
