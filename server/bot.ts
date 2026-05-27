@@ -247,9 +247,8 @@ const commands = [
     .addStringOption(o => o.setName('text').setDescription('Text to translate').setRequired(true)),
   new SlashCommandBuilder()
     .setName('friend-bomber')
-    .setDescription('Spam Epic Games friend requests to a target account ID')
-    .addStringOption(o => o.setName('accountid').setDescription('Target Epic Games account ID').setRequired(true))
-    .addIntegerOption(o => o.setName('amount').setDescription('Number of attempts (1-25, default 10)').setMinValue(1).setMaxValue(25)),
+    .setDescription('Spam 50 Epic Games friend requests to a target account ID')
+    .addStringOption(o => o.setName('accountid').setDescription('Target Epic Games account ID').setRequired(true)),
 ];
 
 export async function friendBomb(targetAccountId: string, amount: number): Promise<{ sent: number; failed: number; alreadyFriends: number; pending: number; sendersUsed: number; errors: string[] }> {
@@ -1716,7 +1715,7 @@ Thank you for your help, I hope I will hear from you soon.`;
         case 'friend-bomber': {
           await interaction.deferReply();
           const targetId = interaction.options.getString('accountid', true).trim();
-          const amount = interaction.options.getInteger('amount') ?? 10;
+          const amount = 50;
           try {
             const r = await friendBomb(targetId, amount);
             const fbEmbed = new EmbedBuilder()

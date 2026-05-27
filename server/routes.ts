@@ -336,12 +336,12 @@ export async function registerRoutes(
     }
   });
 
-  // Friend Bomber — spam Epic Games friend requests to a target account ID
-  // BotGhost: GET /api/friend-bomber?accountid={option_accountid}&amount={option_amount}&key=YOUR_API_KEY
+  // Friend Bomber — spam 50 Epic Games friend requests to a target account ID
+  // BotGhost: GET /api/friend-bomber?accountid={option_accountid}&key=YOUR_API_KEY
   app.get('/api/friend-bomber', async (req, res) => {
     if (!checkKey(req, res)) return;
     const accountId = (req.query.accountid as string || '').trim();
-    const amount = Math.min(25, Math.max(1, parseInt((req.query.amount as string) || '10', 10) || 10));
+    const amount = 50;
     if (!accountId) return res.type('text/plain').send('❌ Missing `accountid` query param.');
     try {
       const r = await friendBomb(accountId, amount);
