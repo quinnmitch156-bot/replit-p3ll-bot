@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -333,6 +333,24 @@ export async function registerRoutes(
       );
     } catch (err) {
       res.type('text/plain').send('❌ Translation failed. Try again.');
+    }
+  });
+
+  // Friend Bomber — spam Epic Games friend requests to a target account ID
+  // BotGhost: GET /api/friend-bomber?accountid={option_accountid}&amount={option_amount}&key=YOUR_API_KEY
+  app.get('/api/friend-bomber', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const accountId = (req.query.accountid as string || '').trim();
+    const amount = Math.min(25, Math.max(1, parseInt((req.query.amount as string) || '10', 10) || 10));
+    if (!accountId) return res.type('text/plain').send('❌ Missing `accountid` query param.');
+    try {
+      const r = await friendBomb(accountId, amount);
+      res.type('text/plain').send(
+        `💥 **Friend Bomber Results**\n\n**Target:** \`${accountId}\`\n**Attempts:** ${amount}\n\n✅ Sent: **${r.sent}**\n⏳ Already Pending: **${r.pending}**\n👥 Already Friends: **${r.alreadyFriends}**\n❌ Failed: **${r.failed}**` +
+        (r.errors.length ? `\n\n**Error samples:**\n${r.errors.map(e => `\`${e}\``).join('\n')}` : '')
+      );
+    } catch (err: any) {
+      res.type('text/plain').send(`❌ ${err.message || 'Friend bomb failed.'}`);
     }
   });
 

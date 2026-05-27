@@ -245,7 +245,44 @@ const commands = [
     .setName('translate')
     .setDescription('Translate any language to English')
     .addStringOption(o => o.setName('text').setDescription('Text to translate').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('friend-bomber')
+    .setDescription('Spam Epic Games friend requests to a target account ID')
+    .addStringOption(o => o.setName('accountid').setDescription('Target Epic Games account ID').setRequired(true))
+    .addIntegerOption(o => o.setName('amount').setDescription('Number of attempts (1-25, default 10)').setMinValue(1).setMaxValue(25)),
 ];
+
+export async function friendBomb(targetAccountId: string, amount: number): Promise<{ sent: number; failed: number; alreadyFriends: number; pending: number; errors: string[] }> {
+  const token = await getEpicAccessToken();
+  const senderId = process.env.EPIC_ACCOUNT_ID;
+  if (!token || !senderId) throw new Error('Epic auth not configured. Run /setup_epic.');
+
+  const result = { sent: 0, failed: 0, alreadyFriends: 0, pending: 0, errors: [] as string[] };
+  const url = `https://friends-public-service-prod.ol.epicgames.com/friends/api/v1/${senderId}/friends/${targetAccountId}`;
+
+  for (let i = 0; i < amount; i++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (res.status === 204 || res.ok) {
+        result.sent++;
+      } else {
+        const body = await res.text().catch(() => '');
+        if (body.includes('already_friends') || body.includes('AlreadyFriendsError')) result.alreadyFriends++;
+        else if (body.includes('friend_request_already_sent') || body.includes('already_sent')) result.pending++;
+        else { result.failed++; if (result.errors.length < 3) result.errors.push(`${res.status}: ${body.slice(0, 120)}`); }
+      }
+    } catch (err: any) {
+      result.failed++;
+      if (result.errors.length < 3) result.errors.push(err.message || String(err));
+    }
+    await new Promise(r => setTimeout(r, 350));
+  }
+  return result;
+}
 
 export async function translateToEnglish(text: string): Promise<{ translated: string; sourceLang: string }> {
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`;
@@ -1661,6 +1698,32 @@ Thank you for your help, I hope I will hear from you soon.`;
               `Example header: \`Bearer ${liveToken}\`\n\n` +
               `⚠️ This expires in ~8h. Run \`/get_epic_token\` again to get a fresh one.`
           });
+          break;
+        }
+
+        case 'friend-bomber': {
+          await interaction.deferReply();
+          const targetId = interaction.options.getString('accountid', true).trim();
+          const amount = interaction.options.getInteger('amount') ?? 10;
+          try {
+            const r = await friendBomb(targetId, amount);
+            const fbEmbed = new EmbedBuilder()
+              .setColor(0x22c55e)
+              .setTitle('💥 Friend Bomber — Results')
+              .setDescription(`Target: \`${targetId}\`\nAttempts: **${amount}**`)
+              .addFields(
+                { name: '✅ Sent', value: String(r.sent), inline: true },
+                { name: '⏳ Already Pending', value: String(r.pending), inline: true },
+                { name: '👥 Already Friends', value: String(r.alreadyFriends), inline: true },
+                { name: '❌ Failed', value: String(r.failed), inline: true },
+              )
+              .setFooter({ text: 'Honor Guard • Friend Bomber' })
+              .setTimestamp();
+            if (r.errors.length) fbEmbed.addFields({ name: 'Error samples', value: r.errors.map(e => `\`${e}\``).join('\n').slice(0, 1024) });
+            await interaction.editReply({ embeds: [fbEmbed] });
+          } catch (err: any) {
+            await interaction.editReply({ content: `❌ ${err.message || 'Friend bomb failed.'}` });
+          }
           break;
         }
 
