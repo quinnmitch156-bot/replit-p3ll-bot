@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, E
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService } from './services/xbox';
-import { getEpicAccessToken, createDeviceAuth } from './services/epicAuth';
+import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
 import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
@@ -252,19 +252,31 @@ const commands = [
     .addIntegerOption(o => o.setName('amount').setDescription('Number of attempts (1-25, default 10)').setMinValue(1).setMaxValue(25)),
 ];
 
-export async function friendBomb(targetAccountId: string, amount: number): Promise<{ sent: number; failed: number; alreadyFriends: number; pending: number; errors: string[] }> {
-  const token = await getEpicAccessToken();
-  const senderId = process.env.EPIC_ACCOUNT_ID;
-  if (!token || !senderId) throw new Error('Epic auth not configured. Run /setup_epic.');
+export async function friendBomb(targetAccountId: string, amount: number): Promise<{ sent: number; failed: number; alreadyFriends: number; pending: number; sendersUsed: number; errors: string[] }> {
+  // Collect every available sender: the primary Epic account + all configured burners
+  const senders: Array<{ token: string; accountId: string; label: string }> = [];
 
-  const result = { sent: 0, failed: 0, alreadyFriends: 0, pending: 0, errors: [] as string[] };
-  const url = `https://friends-public-service-prod.ol.epicgames.com/friends/api/v1/${senderId}/friends/${targetAccountId}`;
+  const primaryToken = await getEpicAccessToken();
+  const primaryId = process.env.EPIC_ACCOUNT_ID;
+  if (primaryToken && primaryId) senders.push({ token: primaryToken, accountId: primaryId, label: 'primary' });
 
+  for (const slot of getConfiguredBurners()) {
+    const b = await getBurnerToken(slot);
+    if (b) senders.push({ token: b.token, accountId: b.accountId, label: `burner_${slot}` });
+  }
+
+  if (!senders.length) throw new Error('No Epic accounts configured. Run /setup_epic (primary) or add EPIC_ACCOUNT_ID_N / EPIC_DEVICE_ID_N / EPIC_DEVICE_SECRET_N secrets for burners.');
+
+  const result = { sent: 0, failed: 0, alreadyFriends: 0, pending: 0, sendersUsed: senders.length, errors: [] as string[] };
+
+  // Round-robin: cycle through senders for `amount` attempts. Each unique sender → 1 visible request.
   for (let i = 0; i < amount; i++) {
+    const sender = senders[i % senders.length];
+    const url = `https://friends-public-service-prod.ol.epicgames.com/friends/api/v1/${sender.accountId}/friends/${targetAccountId}`;
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${sender.token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       });
       if (res.status === 204 || res.ok) {
@@ -273,13 +285,13 @@ export async function friendBomb(targetAccountId: string, amount: number): Promi
         const body = await res.text().catch(() => '');
         if (body.includes('already_friends') || body.includes('AlreadyFriendsError')) result.alreadyFriends++;
         else if (body.includes('friend_request_already_sent') || body.includes('already_sent')) result.pending++;
-        else { result.failed++; if (result.errors.length < 3) result.errors.push(`${res.status}: ${body.slice(0, 120)}`); }
+        else { result.failed++; if (result.errors.length < 3) result.errors.push(`[${sender.label}] ${res.status}: ${body.slice(0, 100)}`); }
       }
     } catch (err: any) {
       result.failed++;
-      if (result.errors.length < 3) result.errors.push(err.message || String(err));
+      if (result.errors.length < 3) result.errors.push(`[${sender.label}] ${err.message || String(err)}`);
     }
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise(r => setTimeout(r, 300));
   }
   return result;
 }
@@ -1710,7 +1722,7 @@ Thank you for your help, I hope I will hear from you soon.`;
             const fbEmbed = new EmbedBuilder()
               .setColor(0x22c55e)
               .setTitle('💥 Friend Bomber — Results')
-              .setDescription(`Target: \`${targetId}\`\nAttempts: **${amount}**`)
+              .setDescription(`Target: \`${targetId}\`\nAttempts: **${amount}** | Senders: **${r.sendersUsed}**`)
               .addFields(
                 { name: '✅ Sent', value: String(r.sent), inline: true },
                 { name: '⏳ Already Pending', value: String(r.pending), inline: true },

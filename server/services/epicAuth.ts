@@ -155,3 +155,48 @@ export async function getEpicAccessToken(): Promise<string | null> {
 
   return null;
 }
+
+// ─── Multi-account burner support ──────────────────────────────────────────
+// Reads EPIC_ACCOUNT_ID_N / EPIC_DEVICE_ID_N / EPIC_DEVICE_SECRET_N (N = 1,2,3…)
+// Used by /friend-bomber to send requests from multiple Epic accounts at once.
+
+const burnerCache = new Map<number, { token: string; accountId: string; exp: number }>();
+
+export function getConfiguredBurners(): number[] {
+  const slots: number[] = [];
+  for (let i = 1; i <= 50; i++) {
+    if (process.env[`EPIC_ACCOUNT_ID_${i}`] && process.env[`EPIC_DEVICE_ID_${i}`] && process.env[`EPIC_DEVICE_SECRET_${i}`]) {
+      slots.push(i);
+    }
+  }
+  return slots;
+}
+
+export async function getBurnerToken(slot: number): Promise<{ token: string; accountId: string } | null> {
+  const now = Date.now();
+  const cached = burnerCache.get(slot);
+  if (cached && now < cached.exp - 300_000) return { token: cached.token, accountId: cached.accountId };
+
+  const accountId = process.env[`EPIC_ACCOUNT_ID_${slot}`];
+  const deviceId = process.env[`EPIC_DEVICE_ID_${slot}`];
+  const deviceSecret = process.env[`EPIC_DEVICE_SECRET_${slot}`];
+  if (!accountId || !deviceId || !deviceSecret) return null;
+
+  try {
+    const res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${FN_BASIC}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'device_auth', account_id: accountId, device_id: deviceId, secret: deviceSecret }).toString()
+    });
+    if (!res.ok) {
+      console.error(`[EpicAuth] Burner ${slot} device_auth failed:`, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    burnerCache.set(slot, { token: data.access_token, accountId, exp: now + (data.expires_in * 1000) });
+    return { token: data.access_token, accountId };
+  } catch (e) {
+    console.error(`[EpicAuth] Burner ${slot} error:`, e);
+    return null;
+  }
+}

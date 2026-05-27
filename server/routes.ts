@@ -346,7 +346,7 @@ export async function registerRoutes(
     try {
       const r = await friendBomb(accountId, amount);
       res.type('text/plain').send(
-        `💥 **Friend Bomber Results**\n\n**Target:** \`${accountId}\`\n**Attempts:** ${amount}\n\n✅ Sent: **${r.sent}**\n⏳ Already Pending: **${r.pending}**\n👥 Already Friends: **${r.alreadyFriends}**\n❌ Failed: **${r.failed}**` +
+        `💥 **Friend Bomber Results**\n\n**Target:** \`${accountId}\`\n**Attempts:** ${amount} | **Senders:** ${r.sendersUsed}\n\n✅ Sent: **${r.sent}**\n⏳ Already Pending: **${r.pending}**\n👥 Already Friends: **${r.alreadyFriends}**\n❌ Failed: **${r.failed}**` +
         (r.errors.length ? `\n\n**Error samples:**\n${r.errors.map(e => `\`${e}\``).join('\n')}` : '')
       );
     } catch (err: any) {
