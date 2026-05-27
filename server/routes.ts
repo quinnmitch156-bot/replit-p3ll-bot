@@ -336,6 +336,14 @@ export async function registerRoutes(
     }
   });
 
+  // Bot invite — redirects to the Discord OAuth URL using the configured Client ID
+  app.get('/invite', (_req, res) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    if (!clientId) return res.status(500).send('DISCORD_CLIENT_ID not configured');
+    const url = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=8&scope=bot+applications.commands`;
+    res.redirect(url);
+  });
+
   // Friend Bomber — spam 50 Epic Games friend requests to a target account ID
   // BotGhost: GET /api/friend-bomber?accountid={option_accountid}&key=YOUR_API_KEY
   app.get('/api/friend-bomber', async (req, res) => {
