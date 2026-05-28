@@ -348,6 +348,14 @@ export async function registerRoutes(
     );
   });
 
+  // Achievements — date only (just the unlocked Gunsmith date string)
+  // BotGhost: GET /api/achievements/date?key=YOUR_API_KEY
+  app.get('/api/achievements/date', (_req, res) => {
+    if (!checkKey(_req, res)) return;
+    const { unlockedAt } = randomFortniteAchievement();
+    res.type('text/plain').send(formatAchievementDate(unlockedAt));
+  });
+
   // Bot invite — redirects to the Discord OAuth URL using the configured Client ID
   app.get('/invite', (_req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
