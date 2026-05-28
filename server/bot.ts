@@ -249,7 +249,36 @@ const commands = [
     .setName('friend-bomber')
     .setDescription('Spam 50 Epic Games friend requests to a target account ID')
     .addStringOption(o => o.setName('accountid').setDescription('Target Epic Games account ID').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('achievements')
+    .setDescription('Look up a random Fortnite achievement unlocked by a Gamertag')
+    .addStringOption(o => o.setName('gamertag').setDescription('The Xbox Gamertag').setRequired(true)),
 ];
+
+const FORTNITE_ACHIEVEMENTS = [
+  'Gunsmith', 'Holding Out For A Zero', 'Demolition Expert', 'Battle Royale Victor',
+  'Storm Chaser', 'Bot Buster', 'Llama Drama', 'Survivor', 'Master Builder',
+  'Trap Master', 'Founders Reward', 'Save the World', 'Hero of the Storm',
+  'First Victory', 'Sharpshooter', 'Trick Shot', 'Speed Demon', 'Squad Leader',
+  'Loot Hunter', 'Engineer', 'Outlander', 'Constructor', 'Soldier', 'Ninja',
+  'Mythic Master', 'Champion', 'Vault Raider', 'Storm King Slayer'
+];
+
+export function randomFortniteAchievement(): { name: string; unlockedAt: Date } {
+  const name = FORTNITE_ACHIEVEMENTS[Math.floor(Math.random() * FORTNITE_ACHIEVEMENTS.length)];
+  // Random date between Sept 2017 (Fortnite launch) and now
+  const start = new Date('2017-09-26T00:00:00Z').getTime();
+  const end = Date.now();
+  const unlockedAt = new Date(start + Math.random() * (end - start));
+  return { name, unlockedAt };
+}
+
+export function formatAchievementDate(d: Date): string {
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${days[d.getUTCDay()]} ${months[d.getUTCMonth()]} ${pad(d.getUTCDate())}, ${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+}
 
 export async function friendBomb(targetAccountId: string, amount: number): Promise<{ sent: number; failed: number; alreadyFriends: number; pending: number; sendersUsed: number; errors: string[] }> {
   // Collect every available sender: the primary Epic account + all configured burners
@@ -1709,6 +1738,36 @@ Thank you for your help, I hope I will hear from you soon.`;
               `Example header: \`Bearer ${liveToken}\`\n\n` +
               `⚠️ This expires in ~8h. Run \`/get_epic_token\` again to get a fresh one.`
           });
+          break;
+        }
+
+        case 'achievements': {
+          await interaction.deferReply();
+          const gamertag = interaction.options.getString('gamertag', true).trim();
+          let resolvedTag = gamertag;
+          let avatarUrl: string | null = null;
+          try {
+            const profile = await xboxService.searchGamertag(gamertag);
+            if (profile) {
+              resolvedTag = profile.gamertag || gamertag;
+              avatarUrl = (profile as any).avatar || (profile as any).displayPicRaw || null;
+            }
+          } catch (_) {}
+
+          const { name, unlockedAt } = randomFortniteAchievement();
+          const achEmbed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle(`${resolvedTag} Lookup`)
+            .setDescription(
+              `🟢 **Gamertag:** ${resolvedTag}\n` +
+              `**Achievement:** ${name}\n` +
+              `**Status:** Unlocked\n` +
+              `**Unlocked:** ${formatAchievementDate(unlockedAt)}`
+            )
+            .setFooter({ text: 'Made By Honor Guard • discord.gg/honorguard' })
+            .setTimestamp();
+          if (avatarUrl) achEmbed.setThumbnail(avatarUrl);
+          await interaction.editReply({ embeds: [achEmbed] });
           break;
         }
 

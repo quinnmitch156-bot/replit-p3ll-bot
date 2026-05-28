@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, randomFortniteAchievement, formatAchievementDate } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -334,6 +334,18 @@ export async function registerRoutes(
     } catch (err) {
       res.type('text/plain').send('❌ Translation failed. Try again.');
     }
+  });
+
+  // Achievements — returns a random Fortnite achievement for a gamertag
+  // BotGhost: GET /api/achievements?gamertag={option_gamertag}&key=YOUR_API_KEY
+  app.get('/api/achievements', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const gamertag = ((req.query.gamertag as string) || '').trim();
+    if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
+    const { name, unlockedAt } = randomFortniteAchievement();
+    res.type('text/plain').send(
+      `🟢 **Gamertag:** ${gamertag}\n**Achievement:** ${name}\n**Status:** Unlocked\n**Unlocked:** ${formatAchievementDate(unlockedAt)}`
+    );
   });
 
   // Bot invite — redirects to the Discord OAuth URL using the configured Client ID
