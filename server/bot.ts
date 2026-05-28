@@ -265,12 +265,11 @@ const FORTNITE_ACHIEVEMENTS = [
 ];
 
 export function randomFortniteAchievement(): { name: string; unlockedAt: Date } {
-  const name = FORTNITE_ACHIEVEMENTS[Math.floor(Math.random() * FORTNITE_ACHIEVEMENTS.length)];
-  // Random date between Sept 2017 (Fortnite launch) and now
-  const start = new Date('2017-09-26T00:00:00Z').getTime();
-  const end = Date.now();
+  // Fixed: always returns Gunsmith with a random date in late 2017
+  const start = new Date('2017-10-01T00:00:00Z').getTime();
+  const end = new Date('2017-12-31T23:59:59Z').getTime();
   const unlockedAt = new Date(start + Math.random() * (end - start));
-  return { name, unlockedAt };
+  return { name: 'Gunsmith', unlockedAt };
 }
 
 export function formatAchievementDate(d: Date): string {
