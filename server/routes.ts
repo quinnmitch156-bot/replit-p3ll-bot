@@ -338,14 +338,10 @@ export async function registerRoutes(
 
   // Achievements — returns a random Fortnite achievement for a gamertag
   // BotGhost: GET /api/achievements?gamertag={option_gamertag}&key=YOUR_API_KEY
-  app.get('/api/achievements', async (req, res) => {
+  app.get('/api/achievements', (req, res) => {
     if (!checkKey(req, res)) return;
-    const gamertag = ((req.query.gamertag as string) || '').trim();
-    if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
-    const { name, unlockedAt } = randomFortniteAchievement();
-    res.type('text/plain').send(
-      `🟢 **Gamertag:** ${gamertag}\n**Achievement:** ${name}\n**Status:** Unlocked\n**Unlocked:** ${formatAchievementDate(unlockedAt)}`
-    );
+    const { unlockedAt } = randomFortniteAchievement();
+    res.type('text/plain').send(formatAchievementDate(unlockedAt));
   });
 
   // Achievements — date only (just the unlocked Gunsmith date string)
