@@ -1,0 +1,1 @@
+- [check-access role lookup](check-access-architecture.md) — Discord role/member API lookups run on the Replit bot's token (not BotGhost); `Unknown Guild` = Replit bot not in server.

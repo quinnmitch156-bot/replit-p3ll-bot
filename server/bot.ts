@@ -102,15 +102,26 @@ export async function checkAccess(userId: string, guildId?: string): Promise<{ h
   return { hasAccess, tier, reason };
 }
 
-export async function hasBotAccessRole(userId: string, guildId: string): Promise<{ ok: boolean; hasRole: boolean }> {
-  const roleId = process.env.BOT_ACCESS_ROLE_ID;
-  if (!roleId) return { ok: false, hasRole: false };
+export async function hasBotAccessRole(
+  userId: string,
+  guildId: string,
+): Promise<{ ok: boolean; hasRole: boolean; error?: string }> {
+  const roleId = (process.env.BOT_ACCESS_ROLE_ID || '').replace(/\D/g, '');
+  if (!roleId) return { ok: false, hasRole: false, error: 'BOT_ACCESS_ROLE_ID not set' };
+
+  // BotGhost can send IDs as mentions (<@123>) or with extra chars — keep digits only.
+  const cleanGuildId = (guildId || '').replace(/\D/g, '');
+  const cleanUserId = (userId || '').replace(/\D/g, '');
+  if (!cleanGuildId) return { ok: true, hasRole: false, error: 'Invalid server id' };
+  if (!cleanUserId) return { ok: true, hasRole: false, error: 'Invalid user id' };
+
   try {
-    const guild = await client.guilds.fetch(guildId);
-    const member = await guild.members.fetch(userId);
+    const guild = await client.guilds.fetch(cleanGuildId);
+    const member = await guild.members.fetch(cleanUserId);
     return { ok: true, hasRole: member.roles.cache.has(roleId) };
-  } catch (_) {
-    return { ok: true, hasRole: false };
+  } catch (err: any) {
+    console.error('hasBotAccessRole error:', err?.message || err);
+    return { ok: true, hasRole: false, error: err?.message || 'lookup failed' };
   }
 }
 

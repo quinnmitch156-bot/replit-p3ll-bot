@@ -358,15 +358,21 @@ export async function registerRoutes(
   app.get('/api/check-access/:guildId/:userId', async (req, res) => {
     if (!checkKey(req, res)) return;
     const { guildId, userId } = req.params;
-    const { ok, hasRole } = await hasBotAccessRole(userId, guildId);
+    const { ok, hasRole, error } = await hasBotAccessRole(userId, guildId);
+    const cleanId = (userId || '').replace(/\D/g, '');
     if (!ok) {
       return res.type('text/plain').send('⚠️ BOT_ACCESS_ROLE_ID is not set in Secrets.');
     }
-    res.type('text/plain').send(
-      hasRole
-        ? `✅ <@${userId}> has access to the bot`
-        : `❌ <@${userId}> does not have access to the bot`
-    );
+    if (hasRole) {
+      return res.type('text/plain').send(`✅ <@${cleanId}> has access to the bot`);
+    }
+    // Distinguish a real "no role" from a lookup failure (e.g. bot not in server)
+    const diag = error === 'Unknown Guild'
+      ? '\n⚠️ The bot is not in this server — invite it via /invite.'
+      : error === 'Unknown Member'
+        ? '\n⚠️ That user is not in this server.'
+        : '';
+    res.type('text/plain').send(`❌ <@${cleanId}> does not have access to the bot${diag}`);
   });
 
   // Check Access — JSON version for BotGhost field-by-field embeds
@@ -374,16 +380,18 @@ export async function registerRoutes(
   app.get('/api/check-access-json/:guildId/:userId', async (req, res) => {
     if (!checkKey(req, res)) return;
     const { guildId, userId } = req.params;
-    const { ok, hasRole } = await hasBotAccessRole(userId, guildId);
+    const { ok, hasRole, error } = await hasBotAccessRole(userId, guildId);
+    const cleanId = (userId || '').replace(/\D/g, '');
     res.json({
-      userId,
+      userId: cleanId,
       configured: ok,
       hasAccess: hasRole,
+      error: error || null,
       message: !ok
         ? '⚠️ BOT_ACCESS_ROLE_ID is not set in Secrets.'
         : hasRole
-          ? `✅ <@${userId}> has access to the bot`
-          : `❌ <@${userId}> does not have access to the bot`,
+          ? `✅ <@${cleanId}> has access to the bot`
+          : `❌ <@${cleanId}> does not have access to the bot`,
     });
   });
 
