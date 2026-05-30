@@ -102,6 +102,18 @@ export async function checkAccess(userId: string, guildId?: string): Promise<{ h
   return { hasAccess, tier, reason };
 }
 
+export async function hasBotAccessRole(userId: string, guildId: string): Promise<{ ok: boolean; hasRole: boolean }> {
+  const roleId = process.env.BOT_ACCESS_ROLE_ID;
+  if (!roleId) return { ok: false, hasRole: false };
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    const member = await guild.members.fetch(userId);
+    return { ok: true, hasRole: member.roles.cache.has(roleId) };
+  } catch (_) {
+    return { ok: true, hasRole: false };
+  }
+}
+
 export async function grantBotRole(guildId: string, userId: string): Promise<boolean> {
   const roleId = process.env.BOT_ACCESS_ROLE_ID;
   if (!roleId) return false;
