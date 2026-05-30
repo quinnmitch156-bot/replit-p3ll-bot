@@ -68,6 +68,40 @@ export async function dmOwnerPaymentClaim(opts: { discordId: string; tag: string
 }
 
 // Exported so routes.ts can assign the bot access role after owner confirms payment
+export async function checkAccess(userId: string, guildId?: string): Promise<{ hasAccess: boolean; tier: string; reason: string }> {
+  const dbUser = await storage.getUserByDiscordId(userId);
+  const isOwner = !!(process.env.OWNER_ID && userId === process.env.OWNER_ID);
+
+  let hasRole = false;
+  const roleId = process.env.BOT_ACCESS_ROLE_ID;
+  if (roleId && guildId) {
+    try {
+      const guild = await client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+      hasRole = member.roles.cache.has(roleId);
+    } catch (_) {}
+  }
+
+  const isLifetime = dbUser?.subscriptionTier === 'lifetime';
+  const isMonthly = dbUser?.subscriptionTier === 'monthly' && !!dbUser.subscriptionExpiresAt && new Date(dbUser.subscriptionExpiresAt) > new Date();
+
+  const hasAccess = isOwner || hasRole || isLifetime || isMonthly;
+
+  let tier = 'None';
+  if (isOwner) tier = 'Owner';
+  else if (isLifetime) tier = 'Lifetime';
+  else if (isMonthly) tier = 'Monthly';
+  else if (hasRole) tier = 'Role';
+
+  let reason = 'No access';
+  if (isOwner) reason = 'Bot owner';
+  else if (hasRole) reason = 'Has access role';
+  else if (isLifetime) reason = 'Lifetime subscription';
+  else if (isMonthly) reason = 'Active monthly subscription';
+
+  return { hasAccess, tier, reason };
+}
+
 export async function grantBotRole(guildId: string, userId: string): Promise<boolean> {
   const roleId = process.env.BOT_ACCESS_ROLE_ID;
   if (!roleId) return false;

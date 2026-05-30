@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, randomFortniteAchievement, formatAchievementDate } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, randomFortniteAchievement, formatAchievementDate, checkAccess } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -350,6 +350,43 @@ export async function registerRoutes(
     if (!checkKey(_req, res)) return;
     const { unlockedAt } = randomFortniteAchievement();
     res.type('text/plain').send(formatAchievementDate(unlockedAt));
+  });
+
+  // Check Access — checks if a member has access to the bot (role / subscription / owner)
+  // BotGhost: GET /api/check-access/{server_id}/{option_member}?key=YOUR_API_KEY
+  // Returns plain text suitable for an embed description.
+  app.get('/api/check-access/:guildId/:userId', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const { guildId, userId } = req.params;
+    try {
+      const { hasAccess, tier, reason } = await checkAccess(userId, guildId);
+      if (hasAccess) {
+        res.type('text/plain').send(`✅ <@${userId}> has access to the bot\n**Tier:** ${tier}\n**Reason:** ${reason}`);
+      } else {
+        res.type('text/plain').send(`❌ <@${userId}> does not have access to the bot`);
+      }
+    } catch (_) {
+      res.type('text/plain').send(`❌ <@${userId}> does not have access to the bot`);
+    }
+  });
+
+  // Check Access — JSON version for BotGhost field-by-field embeds
+  // BotGhost: GET /api/check-access-json/{server_id}/{option_member}?key=YOUR_API_KEY
+  app.get('/api/check-access-json/:guildId/:userId', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const { guildId, userId } = req.params;
+    try {
+      const { hasAccess, tier, reason } = await checkAccess(userId, guildId);
+      res.json({
+        userId,
+        hasAccess,
+        tier,
+        reason,
+        message: hasAccess ? `✅ <@${userId}> has access to the bot` : `❌ <@${userId}> does not have access to the bot`,
+      });
+    } catch (_) {
+      res.json({ userId, hasAccess: false, tier: 'None', reason: 'No access', message: `❌ <@${userId}> does not have access to the bot` });
+    }
   });
 
   // Bot invite — redirects to the Discord OAuth URL using the configured Client ID
