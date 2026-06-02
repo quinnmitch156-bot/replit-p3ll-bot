@@ -3,10 +3,11 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, randomFortniteAchievement, formatAchievementDate, hasBotAccessRole } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, formatAchievementDate, hasBotAccessRole } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
+import { fetchGunsmith } from "./services/xbox";
 import fs from "fs";
 import path from "path";
 
@@ -336,24 +337,32 @@ export async function registerRoutes(
     }
   });
 
-  // Achievements — Fortnite "Gunsmith" achievement card for a gamertag
+  // Achievements — REAL Fortnite "Gunsmith" achievement for a gamertag (via xbl.io)
   // BotGhost: GET /api/achievements?gamertag={option_gamertag}&key=YOUR_API_KEY
-  app.get('/api/achievements', (req, res) => {
+  app.get('/api/achievements', async (req, res) => {
     if (!checkKey(req, res)) return;
     const gamertag = ((req.query.gamertag as string) || '').trim();
     if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
-    const { name, unlockedAt } = randomFortniteAchievement();
+    const r = await fetchGunsmith(gamertag);
+    if (r.error) return res.type('text/plain').send(r.error);
+    if (!r.achieved || !r.unlockedAt) {
+      return res.type('text/plain').send(`🟢 **Gamertag:** ${r.gamertag}\n**Achievement:** Gunsmith\n**Status:** 🔒 Locked (not unlocked)`);
+    }
     res.type('text/plain').send(
-      `🟢 **Gamertag:** ${gamertag}\n**Achievement:** ${name}\n**Status:** Unlocked\n**Unlocked:** ${formatAchievementDate(unlockedAt)}`
+      `🟢 **Gamertag:** ${r.gamertag}\n**Achievement:** Gunsmith\n**Status:** ✅ Unlocked\n**Unlocked:** ${formatAchievementDate(new Date(r.unlockedAt))}`
     );
   });
 
-  // Achievements — date only (just the Gunsmith unlock date string)
-  // BotGhost: GET /api/achievements/date?key=YOUR_API_KEY
-  app.get('/api/achievements/date', (_req, res) => {
-    if (!checkKey(_req, res)) return;
-    const { unlockedAt } = randomFortniteAchievement();
-    res.type('text/plain').send(formatAchievementDate(unlockedAt));
+  // Achievements — date only (raw Gunsmith unlock date string for a gamertag)
+  // BotGhost: GET /api/achievements/date?gamertag={option_gamertag}&key=YOUR_API_KEY
+  app.get('/api/achievements/date', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const gamertag = ((req.query.gamertag as string) || '').trim();
+    if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
+    const r = await fetchGunsmith(gamertag);
+    if (r.error) return res.type('text/plain').send(r.error);
+    if (!r.unlockedAt) return res.type('text/plain').send('🔒 Gunsmith not unlocked on this account.');
+    res.type('text/plain').send(r.unlockedAt);
   });
 
   // Check Access — checks if a member has the bot access role (BOT_ACCESS_ROLE_ID)

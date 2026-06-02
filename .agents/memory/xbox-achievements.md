@@ -1,14 +1,18 @@
 ---
-name: Xbox achievements via xbl.io
-description: How the real achievements lookup works and why Fortnite returns empty
+name: Xbox / Fortnite Gunsmith achievement via xbl.io
+description: Real Gunsmith lookup uses the Fortnite Save-the-World Xbox title id
 ---
 
-# Real Xbox achievements use xbl.io, but Fortnite has none
+# Fortnite Gunsmith achievement IS real on Xbox (via Save the World)
 
-**Current production decision:** `/api/achievements` and `/api/achievements/date` return a GENERATED "Gunsmith" achievement with a random late-2017 date (`randomFortniteAchievement()` in bot.ts). The user prefers this over real data because Fortnite has no real Xbox achievements (see below), so a real lookup is always empty for their use case. Do NOT "fix" this back to real xbl.io unless the user explicitly asks.
+**Correcting an earlier wrong assumption:** Fortnite *Battle Royale* has no Xbox achievements, but Fortnite *Save the World* (the original 2017 paid PvE title) DOES — and "Gunsmith" is one of its achievements. OG accounts unlocked it in late 2017, which is why it's used as an account-age signal.
 
-A real-lookup implementation (resolve gamertag→XUID via `xbl.io /friends/search`, then `xbl.io /achievements/player/{xuid}`) was built and then removed; reference git history if it's ever needed again.
+**The Fortnite Xbox title id with achievements is `267695549`.** A player can have TWO Fortnite entries in xbl.io titles: `267695549` (Save the World, has achievements) and `1820250788` (0 achievements — ignore it). Hardcode `267695549`.
 
-**Why Fortnite lookups come back empty:** Fortnite Battle Royale registers NO Xbox achievements / gamerscore. A Fortnite-only account legitimately returns "No unlocked achievements found." This is correct behavior, not a bug. Use the optional `&game=fortnite` filter only if you accept it will almost always be empty; general (all-title) lookups work for accounts that play other games.
+**Real Gunsmith lookup flow** (`fetchGunsmith()` in `server/routes.ts`, behind `/api/achievements` and `/api/achievements/date`):
+1. gamertag → XUID via `https://xbl.io/api/v2/search/{gamertag}` → `content.people[].xuid`. Use `/search`, NOT `/friends/search` (the latter is much more aggressively rate-limited).
+2. `https://xbl.io/api/v2/achievements/player/{xuid}/267695549` → find achievement where name == "gunsmith"; unlock date is `progression.timeUnlocked` (ISO like `2017-12-01T21:26:23.6940000Z`), unlocked when `progressState === 'Achieved'`.
 
-**xbl.io shared-key rate limit:** 60 requests / 5 min (`code: 429` with `currentRequests/maxRequests`). Each achievements lookup costs 2 calls (search + achievements). A 2-min in-memory cache keyed by `xuid|gameFilter` plus status-aware error messages (429→rate-limited, 401/403→bad key, 5xx→upstream) live in `fetchXboxAchievements`. When debugging "gamertag not found", check for a real 429 first — don't hammer the key while testing.
+**xbl.io shared-key limit:** 60 req / 5 min (`{code:429, content:{currentRequests,maxRequests}}`). Don't hammer it while testing; a real 429 looks like "gamertag not found" if you don't surface it. Status-aware error messages live in `fetchGunsmith`.
+
+**Dev gotcha:** after editing these routes, the running tsx/Vite server may keep serving the OLD handler — if a "real" endpoint returns values that change every call (random 2017 dates), the new code didn't load. Explicitly `restart_workflow` and wait ~4s before curling.

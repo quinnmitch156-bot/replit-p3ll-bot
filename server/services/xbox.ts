@@ -22,6 +22,76 @@ export interface XboxFriend {
   presenceState: string;
 }
 
+// Fortnite (Save the World) Xbox title — the one that actually has achievements
+// (incl. "Gunsmith"). The other Fortnite title (1820250788) has 0 achievements.
+export const FORTNITE_TITLE_ID = '267695549';
+
+export interface GunsmithResult {
+  gamertag: string;
+  unlockedAt: string | null;
+  achieved: boolean;
+  error?: string;
+}
+
+// Resolve a gamertag to its XUID, then pull the REAL Fortnite "Gunsmith" achievement
+// from xbl.io's per-title endpoint: /achievements/player/{xuid}/{FORTNITE_TITLE_ID}.
+export async function fetchGunsmith(gamertag: string): Promise<GunsmithResult> {
+  const xblKey = process.env.XBL_IO_API_KEY || process.env.XBL_TOKEN || '';
+  const out: GunsmithResult = { gamertag, unlockedAt: null, achieved: false };
+  if (!xblKey) return { ...out, error: '⚠️ XBL_IO_API_KEY is not set in Secrets.' };
+  const headers = { 'X-Authorization': xblKey, 'Accept': 'application/json' };
+
+  const statusError = (status: number, what: string): string => {
+    if (status === 429) return '⏳ xbl.io is rate-limited right now (60 requests / 5 min). Try again in a few minutes.';
+    if (status === 401 || status === 403) return '⚠️ xbl.io rejected the API key (XBL_IO_API_KEY). Check the key.';
+    if (status >= 500) return `❌ xbl.io is having issues (HTTP ${status}). Try again shortly.`;
+    return `❌ Could not ${what} (HTTP ${status}).`;
+  };
+
+  // 1. Resolve gamertag -> XUID via /search (not rate-limited like /friends/search)
+  let xuid = '';
+  try {
+    const sRes = await fetch(
+      `https://xbl.io/api/v2/search/${encodeURIComponent(gamertag)}`,
+      { headers, signal: AbortSignal.timeout(8000) }
+    );
+    if (!sRes.ok) return { ...out, error: statusError(sRes.status, 'find that gamertag') };
+    const sd: any = await sRes.json();
+    const people: any[] = sd.content?.people || sd.people || [];
+    const exact = people.find(p => (p.gamertag || '').toLowerCase() === gamertag.toLowerCase());
+    const person = exact || people[0];
+    if (person) {
+      xuid = person.xuid || '';
+      if (person.gamertag) out.gamertag = person.gamertag;
+    }
+  } catch (_) {
+    return { ...out, error: '❌ xbl.io request timed out. Try again.' };
+  }
+  if (!xuid) return { ...out, error: `❌ Gamertag not found: ${gamertag}` };
+
+  // 2. Pull the Fortnite (STW) achievements for this player and find Gunsmith
+  try {
+    const aRes = await fetch(
+      `https://xbl.io/api/v2/achievements/player/${xuid}/${FORTNITE_TITLE_ID}`,
+      { headers, signal: AbortSignal.timeout(10000) }
+    );
+    if (!aRes.ok) return { ...out, error: statusError(aRes.status, 'fetch achievements') };
+    const d: any = await aRes.json();
+    const list: any[] = d.achievements || d.content?.achievements || [];
+    const g = list.find(x => (x.name || '').toLowerCase() === 'gunsmith');
+    if (!g) {
+      return { ...out, error: `❌ No Gunsmith achievement found for ${out.gamertag} (account may not have played Fortnite Save the World on Xbox).` };
+    }
+    const unlockedAt = g.progression?.timeUnlocked || (Array.isArray(g.progression) ? g.progression[0]?.timeUnlocked : null) || null;
+    const valid = unlockedAt && !String(unlockedAt).startsWith('0001') ? unlockedAt : null;
+    out.achieved = (g.progressState || '').toLowerCase() === 'achieved' || !!valid;
+    out.unlockedAt = valid;
+    return out;
+  } catch (_) {
+    return { ...out, error: '❌ Achievement lookup failed. Try again.' };
+  }
+}
+
 export class XboxService {
   private apiKey: string;
   private baseUrl = 'https://xbl.io/api/v2';

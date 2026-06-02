@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType, MessageFlags, AttachmentBuilder } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
-import { xboxService } from './services/xbox';
+import { xboxService, fetchGunsmith } from './services/xbox';
 import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
 import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
@@ -308,26 +308,9 @@ const commands = [
     .addStringOption(o => o.setName('accountid').setDescription('Target Epic Games account ID').setRequired(true)),
   new SlashCommandBuilder()
     .setName('achievements')
-    .setDescription('Look up a random Fortnite achievement unlocked by a Gamertag')
+    .setDescription('Look up the real Fortnite Gunsmith achievement unlock date for a Gamertag')
     .addStringOption(o => o.setName('gamertag').setDescription('The Xbox Gamertag').setRequired(true)),
 ];
-
-const FORTNITE_ACHIEVEMENTS = [
-  'Gunsmith', 'Holding Out For A Zero', 'Demolition Expert', 'Battle Royale Victor',
-  'Storm Chaser', 'Bot Buster', 'Llama Drama', 'Survivor', 'Master Builder',
-  'Trap Master', 'Founders Reward', 'Save the World', 'Hero of the Storm',
-  'First Victory', 'Sharpshooter', 'Trick Shot', 'Speed Demon', 'Squad Leader',
-  'Loot Hunter', 'Engineer', 'Outlander', 'Constructor', 'Soldier', 'Ninja',
-  'Mythic Master', 'Champion', 'Vault Raider', 'Storm King Slayer'
-];
-
-export function randomFortniteAchievement(): { name: string; unlockedAt: Date } {
-  // Fixed: always returns Gunsmith with a random date in late 2017
-  const start = new Date('2017-10-01T00:00:00Z').getTime();
-  const end = new Date('2017-12-31T23:59:59Z').getTime();
-  const unlockedAt = new Date(start + Math.random() * (end - start));
-  return { name: 'Gunsmith', unlockedAt };
-}
 
 export function formatAchievementDate(d: Date): string {
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1810,15 +1793,22 @@ Thank you for your help, I hope I will hear from you soon.`;
             }
           } catch (_) {}
 
-          const { name, unlockedAt } = randomFortniteAchievement();
+          const gs = await fetchGunsmith(gamertag);
+          if (gs.error) {
+            await interaction.editReply({ content: gs.error });
+            break;
+          }
+          if (gs.gamertag) resolvedTag = gs.gamertag;
+          const statusLine = gs.achieved && gs.unlockedAt
+            ? `**Status:** ✅ Unlocked\n**Unlocked:** ${formatAchievementDate(new Date(gs.unlockedAt))}`
+            : `**Status:** 🔒 Locked (not unlocked)`;
           const achEmbed = new EmbedBuilder()
             .setColor(0x22c55e)
             .setTitle(`${resolvedTag} Lookup`)
             .setDescription(
               `🟢 **Gamertag:** ${resolvedTag}\n` +
-              `**Achievement:** ${name}\n` +
-              `**Status:** Unlocked\n` +
-              `**Unlocked:** ${formatAchievementDate(unlockedAt)}`
+              `**Achievement:** Gunsmith\n` +
+              statusLine
             )
             .setFooter({ text: 'Made By Honor Guard • discord.gg/honorguard' })
             .setTimestamp();
