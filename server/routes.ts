@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, randomFortniteAchievement, formatAchievementDate, hasBotAccessRole } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, formatAchievementDate, hasBotAccessRole } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -12,6 +12,114 @@ import path from "path";
 
 const RECEIPTS_DIR = path.resolve(process.cwd(), 'public/receipts');
 if (!fs.existsSync(RECEIPTS_DIR)) fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+
+interface XboxAchievement {
+  name: string;
+  game: string;
+  unlockedAt: string | null;
+  gamerscore: string;
+}
+
+interface XboxAchievementsResult {
+  gamertag: string;
+  totalUnlocked: number;
+  achievements: XboxAchievement[];
+  error?: string;
+}
+
+// Map an xbl.io HTTP status to a clear, user-facing message.
+function xblStatusError(status: number, what: string): string {
+  if (status === 429) return '⏳ xbl.io is rate-limited right now (60 requests / 5 min). Try again in a few minutes.';
+  if (status === 401 || status === 403) return '⚠️ xbl.io rejected the API key (XBL_IO_API_KEY). Check the key.';
+  if (status >= 500) return `❌ xbl.io is having issues (HTTP ${status}). Try again shortly.`;
+  return `❌ Could not ${what} (HTTP ${status}).`;
+}
+
+// Short-lived in-memory cache to reduce xbl.io call volume (key = xuid+gameFilter).
+const achCache = new Map<string, { at: number; data: XboxAchievementsResult }>();
+const ACH_CACHE_TTL = 120_000; // 2 minutes
+
+// Resolve a gamertag to its XUID, then pull REAL Xbox achievements via xbl.io.
+// Returns achievements sorted most-recently-unlocked first, optionally filtered by game name.
+async function fetchXboxAchievements(gamertag: string, gameFilter = ''): Promise<XboxAchievementsResult> {
+  const xblKey = process.env.XBL_IO_API_KEY || process.env.XBL_TOKEN || '';
+  const out: XboxAchievementsResult = { gamertag, totalUnlocked: 0, achievements: [] };
+  if (!xblKey) return { ...out, error: '⚠️ XBL_IO_API_KEY is not set in Secrets.' };
+
+  // 1. Resolve gamertag -> XUID (with exact, case-insensitive match)
+  let xuid = '';
+  try {
+    const profRes = await fetch(
+      `https://xbl.io/api/v2/friends/search?gt=${encodeURIComponent(gamertag)}`,
+      { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+    );
+    if (!profRes.ok) return { ...out, error: xblStatusError(profRes.status, 'find that gamertag') };
+    const pd: any = await profRes.json();
+    const users: any[] = pd.profileUsers || pd.content?.profileUsers || [];
+    const getGt = (u: any) => (u.settings || []).find((s: any) => s.id === 'Gamertag')?.value || '';
+    // Prefer an exact (case-insensitive) gamertag match; fall back to first result.
+    const exact = users.find(u => getGt(u).toLowerCase() === gamertag.toLowerCase());
+    const user = exact || users[0];
+    if (user) {
+      xuid = user.id || '';
+      const gt = getGt(user);
+      if (gt) out.gamertag = gt;
+    }
+  } catch (_) {
+    return { ...out, error: '❌ xbl.io request timed out. Try again.' };
+  }
+  if (!xuid) return { ...out, error: `❌ Gamertag not found: ${gamertag}` };
+
+  // Serve from cache if fresh
+  const cacheKey = `${xuid}|${gameFilter}`;
+  const cached = achCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < ACH_CACHE_TTL) {
+    return { ...cached.data, gamertag: out.gamertag };
+  }
+
+  // 2. Pull achievements for the player
+  try {
+    const achRes = await fetch(
+      `https://xbl.io/api/v2/achievements/player/${xuid}`,
+      { headers: { 'X-Authorization': xblKey, 'Accept': 'application/json' }, signal: AbortSignal.timeout(10000) }
+    );
+    if (!achRes.ok) return { ...out, error: xblStatusError(achRes.status, 'fetch achievements') };
+    const data: any = await achRes.json();
+    const raw: any[] = data.achievements || data.content?.achievements || [];
+
+    const parsed = raw.map((a: any) => {
+      const game = (a.titleAssociations?.[0]?.name) || a.serviceConfigId || '';
+      const unlockedAt = a.progression?.timeUnlocked || a.progression?.[0]?.timeUnlocked || null;
+      const validDate = unlockedAt && !unlockedAt.startsWith('0001') ? unlockedAt : null;
+      const gs = (a.rewards || []).find((r: any) => r.type === 'Gamerscore')?.value || '';
+      const state = (a.progressState || '').toLowerCase();
+      return {
+        name: a.name || 'Unknown',
+        game,
+        unlockedAt: validDate,
+        gamerscore: gs,
+        _achieved: state === 'achieved' || !!validDate,
+      };
+    });
+
+    let unlocked = parsed.filter((a) => a._achieved);
+    if (gameFilter) {
+      unlocked = unlocked.filter(a => a.game.toLowerCase().includes(gameFilter));
+    }
+    unlocked.sort((a, b) => {
+      const ta = a.unlockedAt ? new Date(a.unlockedAt).getTime() : 0;
+      const tb = b.unlockedAt ? new Date(b.unlockedAt).getTime() : 0;
+      return tb - ta;
+    });
+
+    out.totalUnlocked = unlocked.length;
+    out.achievements = unlocked.map(({ name, game, unlockedAt, gamerscore }) => ({ name, game, unlockedAt, gamerscore }));
+    achCache.set(cacheKey, { at: Date.now(), data: out });
+    return out;
+  } catch (_) {
+    return { ...out, error: '❌ Achievement lookup failed. Try again.' };
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -336,20 +444,45 @@ export async function registerRoutes(
     }
   });
 
-  // Achievements — returns a random Fortnite achievement for a gamertag
+  // Achievements — REAL Xbox achievements via xbl.io for a gamertag
   // BotGhost: GET /api/achievements?gamertag={option_gamertag}&key=YOUR_API_KEY
-  app.get('/api/achievements', (req, res) => {
+  // Optional: &game=fortnite to filter to a specific game (default: all titles)
+  app.get('/api/achievements', async (req, res) => {
     if (!checkKey(req, res)) return;
-    const { unlockedAt } = randomFortniteAchievement();
-    res.type('text/plain').send(formatAchievementDate(unlockedAt));
+    const gamertag = ((req.query.gamertag as string) || '').trim();
+    if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
+    const gameFilter = ((req.query.game as string) || '').trim().toLowerCase();
+
+    const result = await fetchXboxAchievements(gamertag, gameFilter);
+    if (result.error) return res.type('text/plain').send(result.error);
+    if (result.achievements.length === 0) {
+      return res.type('text/plain').send(
+        `🟢 **Gamertag:** ${result.gamertag}\n❌ No${gameFilter ? ' matching' : ''} unlocked achievements found.`
+      );
+    }
+    const lines = result.achievements.slice(0, 10).map(a =>
+      `🏆 **${a.name}**${a.game ? ` — ${a.game}` : ''}\n   Unlocked: ${a.unlockedAt ? formatAchievementDate(new Date(a.unlockedAt)) : 'N/A'}${a.gamerscore ? ` • ${a.gamerscore}G` : ''}`
+    );
+    res.type('text/plain').send(
+      `🟢 **Gamertag:** ${result.gamertag}\n**Unlocked Achievements:** ${result.totalUnlocked}\n\n${lines.join('\n')}`
+    );
   });
 
-  // Achievements — date only (just the unlocked Gunsmith date string)
-  // BotGhost: GET /api/achievements/date?key=YOUR_API_KEY
-  app.get('/api/achievements/date', (_req, res) => {
-    if (!checkKey(_req, res)) return;
-    const { unlockedAt } = randomFortniteAchievement();
-    res.type('text/plain').send(formatAchievementDate(unlockedAt));
+  // Achievements — date only (unlock date of the most recent real achievement)
+  // BotGhost: GET /api/achievements/date?gamertag={option_gamertag}&key=YOUR_API_KEY
+  app.get('/api/achievements/date', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const gamertag = ((req.query.gamertag as string) || '').trim();
+    if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
+    const gameFilter = ((req.query.game as string) || '').trim().toLowerCase();
+
+    const result = await fetchXboxAchievements(gamertag, gameFilter);
+    if (result.error) return res.type('text/plain').send(result.error);
+    const withDate = result.achievements.find(a => a.unlockedAt);
+    if (!withDate || !withDate.unlockedAt) {
+      return res.type('text/plain').send('❌ No unlocked achievement date found.');
+    }
+    res.type('text/plain').send(formatAchievementDate(new Date(withDate.unlockedAt)));
   });
 
   // Check Access — checks if a member has the bot access role (BOT_ACCESS_ROLE_ID)

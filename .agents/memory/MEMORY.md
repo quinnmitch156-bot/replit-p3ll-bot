@@ -1,1 +1,2 @@
 - [check-access role lookup](check-access-architecture.md) — Discord role/member API lookups run on the Replit bot's token (not BotGhost); `Unknown Guild` = Replit bot not in server.
+- [Xbox achievements via xbl.io](xbox-achievements.md) — real achievements pull works, but Fortnite has NO Xbox achievements so it returns empty; xbl.io shared key is 60 req/5min.
