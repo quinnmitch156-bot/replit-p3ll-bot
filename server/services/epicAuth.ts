@@ -70,6 +70,63 @@ async function launcherToFortniteJWT(launcherToken: string): Promise<string | nu
   }
 }
 
+// Exchange a one-time auth code into PERMANENT device-auth credentials.
+// Device auth does NOT rotate (unlike refresh tokens) and can be used by
+// multiple instances (dev + production) at once without invalidation.
+// Returns { accountId, deviceId, secret, displayName } or { error }.
+export async function createDeviceAuth(
+  authCode: string
+): Promise<{ accountId: string; deviceId: string; secret: string; displayName: string } | { error: string }> {
+  // Step 1: auth code -> Launcher access token
+  let launcherToken = '';
+  let accountId = '';
+  let displayName = 'Unknown';
+  try {
+    const res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${LAUNCHER_BASIC}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=authorization_code&code=${encodeURIComponent(authCode)}`,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let reason = `HTTP ${res.status}`;
+      try { const e = JSON.parse(text); reason = e.errorMessage || e.error_description || e.message || reason; } catch (_) {}
+      return { error: `Auth code exchange failed: ${reason}` };
+    }
+    const data = JSON.parse(text);
+    launcherToken = data.access_token;
+    accountId = data.account_id;
+    displayName = data.displayName || 'Unknown';
+    if (!launcherToken || !accountId) return { error: 'No access_token / account_id in Epic response.' };
+  } catch (e) {
+    return { error: `Token request error: ${(e as Error).message}` };
+  }
+
+  // Step 2: promote to a Fortnite PC JWT — device auth must be created with the
+  // same Fortnite client that later consumes it (device_auth grant uses FN_BASIC).
+  const fnToken = await launcherToFortniteJWT(launcherToken);
+  const accessToken = fnToken || launcherToken;
+
+  // Step 3: create the device auth on the account
+  try {
+    const res = await fetch(
+      `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${accountId}/deviceAuth`,
+      { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: '{}' }
+    );
+    const text = await res.text();
+    if (!res.ok) {
+      let reason = `HTTP ${res.status}`;
+      try { const e = JSON.parse(text); reason = e.errorMessage || e.error_description || e.message || reason; } catch (_) {}
+      return { error: `Device auth creation failed: ${reason}` };
+    }
+    const da = JSON.parse(text);
+    if (!da.deviceId || !da.secret || !da.accountId) return { error: 'Device auth response missing fields.' };
+    return { accountId: da.accountId, deviceId: da.deviceId, secret: da.secret, displayName };
+  } catch (e) {
+    return { error: `Device auth request error: ${(e as Error).message}` };
+  }
+}
+
 export async function getEpicAccessToken(): Promise<string | null> {
   const now = Date.now();
 
@@ -78,7 +135,37 @@ export async function getEpicAccessToken(): Promise<string | null> {
     return cachedToken;
   }
 
-  // Priority 1: refresh_token flow → Launcher token → Fortnite JWT
+  // Priority 1: Device Auth → Fortnite JWT directly.
+  // Preferred because device auth does NOT rotate and works across multiple
+  // instances (dev + production) simultaneously without invalidating itself.
+  const accountId = process.env.EPIC_ACCOUNT_ID;
+  const deviceId = process.env.EPIC_DEVICE_ID;
+  const deviceSecret = process.env.EPIC_DEVICE_SECRET;
+
+  if (accountId && deviceId && deviceSecret) {
+    try {
+      const res = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${FN_BASIC}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'device_auth', account_id: accountId, device_id: deviceId, secret: deviceSecret }).toString()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        cachedToken = data.access_token;
+        tokenExpiresAt = now + (data.expires_in * 1000);
+        console.log('[EpicAuth] Token via Device Auth, expires in', data.expires_in, 'seconds');
+        return cachedToken;
+      } else {
+        console.error('[EpicAuth] Device Auth failed:', await res.text());
+      }
+    } catch (e) {
+      console.error('[EpicAuth] Device Auth error:', e);
+    }
+  }
+
+  // Priority 2: refresh_token flow → Launcher token → Fortnite JWT.
+  // NOTE: Epic rotates (single-use) refresh tokens, so this breaks if more than
+  // one instance refreshes the same token. Device auth above is preferred.
   const refreshToken = getStoredRefreshToken();
   if (refreshToken) {
     try {
@@ -117,32 +204,6 @@ export async function getEpicAccessToken(): Promise<string | null> {
       }
     } catch (e) {
       console.error('[EpicAuth] Refresh token error:', e);
-    }
-  }
-
-  // Priority 2: Device Auth → Fortnite JWT directly
-  const accountId = process.env.EPIC_ACCOUNT_ID;
-  const deviceId = process.env.EPIC_DEVICE_ID;
-  const deviceSecret = process.env.EPIC_DEVICE_SECRET;
-
-  if (accountId && deviceId && deviceSecret) {
-    try {
-      const res = await fetch(TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Authorization': `Basic ${FN_BASIC}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'device_auth', account_id: accountId, device_id: deviceId, secret: deviceSecret }).toString()
-      });
-      if (res.ok) {
-        const data = await res.json();
-        cachedToken = data.access_token;
-        tokenExpiresAt = now + (data.expires_in * 1000);
-        console.log('[EpicAuth] Token via Device Auth, expires in', data.expires_in, 'seconds');
-        return cachedToken;
-      } else {
-        console.error('[EpicAuth] Device Auth failed:', await res.text());
-      }
-    } catch (e) {
-      console.error('[EpicAuth] Device Auth error:', e);
     }
   }
 

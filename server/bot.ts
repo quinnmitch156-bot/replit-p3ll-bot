@@ -3,7 +3,7 @@ import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService, fetchGunsmith } from './services/xbox';
 import { fetchOriginalPlatform } from './services/epicAccount';
-import { getEpicAccessToken, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
+import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
 import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
@@ -1612,55 +1612,31 @@ Thank you for your help, I hope I will hear from you soon.`;
           }
 
           const authCode = interaction.options.getString('auth_code', true).trim();
-          const launcherBasic = Buffer.from('34a02cf8f4414e29b15921876da36f9a:daafbccc737745039dffe53d94fc76cf').toString('base64');
-          const EPIC_TOKEN_URL = 'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token';
 
           try {
-            await interaction.editReply({ content: '🔄 Exchanging auth code...' });
+            await interaction.editReply({ content: '🔄 Creating permanent device auth...' });
 
-            const tokenRes = await fetch(EPIC_TOKEN_URL, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Basic ${launcherBasic}`,
-                'Content-Type': 'application/x-www-form-urlencoded'
-              },
-              body: `grant_type=authorization_code&code=${encodeURIComponent(authCode)}`
-            });
-            const tokenText = await tokenRes.text();
-            console.log(`[setup_epic] exchange status=${tokenRes.status} body=${tokenText.substring(0, 400)}`);
-
-            if (!tokenRes.ok) {
-              let reason = `HTTP ${tokenRes.status}`;
-              try { const e = JSON.parse(tokenText); reason = e.errorMessage || e.error_description || e.message || reason; } catch (_) {}
+            const da = await createDeviceAuth(authCode);
+            if ('error' in da) {
               await interaction.editReply({
-                content: `❌ Auth code exchange failed: **${reason}**\n\nAuth codes expire in ~5 minutes. Get a fresh one at:\n\`https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code\`\n\nThen run \`/setup_epic\` immediately.`
+                content: `❌ ${da.error}\n\nAuth codes expire in ~5 minutes. Get a fresh one at:\n\`https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code\`\n\nThen run \`/setup_epic\` immediately.`
               });
               break;
             }
 
-            const tokenData = JSON.parse(tokenText);
-            const refreshToken = tokenData.refresh_token;
-            const accessToken = tokenData.access_token;
-            const displayName = tokenData.displayName || 'Unknown';
-            const expiresIn = tokenData.refresh_expires_in || tokenData.refresh_expires || '?';
-
-            if (!refreshToken || !accessToken) {
-              await interaction.editReply({ content: `❌ No refresh_token in response. Raw: \`${tokenText.substring(0, 300)}\`` });
-              break;
-            }
-
-            // Store refresh token in memory and on disk so it survives restarts
-            process.env.EPIC_REFRESH_TOKEN = refreshToken;
-            try { require('fs').writeFileSync('.epic_refresh_token', refreshToken, 'utf8'); } catch (_) {}
-
-            const expiryDays = typeof expiresIn === 'number' ? Math.round(expiresIn / 86400) : 30;
+            // Apply immediately to the running process so Epic commands work now.
+            process.env.EPIC_ACCOUNT_ID = da.accountId;
+            process.env.EPIC_DEVICE_ID = da.deviceId;
+            process.env.EPIC_DEVICE_SECRET = da.secret;
 
             await interaction.editReply({
-              content: `✅ **Epic auth set up successfully!** Logged in as **${displayName}**\n\n` +
-                `The bot will auto-refresh its token using this refresh token (valid ~${expiryDays} days).\n\n` +
-                `Add this **1 secret** to Replit Secrets so it persists across restarts:\n\n` +
-                `**EPIC_REFRESH_TOKEN**\n\`\`\`${refreshToken}\`\`\`\n\n` +
-                `⚠️ Keep this private. Re-run \`/setup_epic\` with a new code after ${expiryDays} days.`
+              content: `✅ **Epic auth set up successfully!** Logged in as **${da.displayName}**\n\n` +
+                `These are **permanent** credentials — they never expire and won't break when the bot runs in more than one place.\n\n` +
+                `Add these **3 secrets** to Replit Secrets so they persist across restarts & deployments:\n\n` +
+                `**EPIC_ACCOUNT_ID**\n\`\`\`${da.accountId}\`\`\`\n` +
+                `**EPIC_DEVICE_ID**\n\`\`\`${da.deviceId}\`\`\`\n` +
+                `**EPIC_DEVICE_SECRET**\n\`\`\`${da.secret}\`\`\`\n\n` +
+                `⚠️ Keep these private. Once saved you never have to run this again.`
             });
           } catch (e) {
             console.error('[setup_epic] Error:', e);
