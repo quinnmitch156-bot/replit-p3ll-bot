@@ -13,11 +13,12 @@ const FN_ID = 'ec684b8c687f479fadea3cb2ad83f5c6';
 const FN_SECRET = 'e1f31c211f28413186262d37a13fc84d';
 const FN_BASIC = Buffer.from(`${FN_ID}:${FN_SECRET}`).toString('base64');
 
-// Fortnite iOS client — the only client with the `deviceAuths CREATE` scope,
-// so device auth must be created (and is used) with this client.
-const IOS_ID = '3446cd72694c4a4485d81b77adbb2141';
-const IOS_SECRET = '9209d4a5e25a457fb9b07489d313b41a';
-const IOS_BASIC = Buffer.from(`${IOS_ID}:${IOS_SECRET}`).toString('base64');
+// Fortnite Android client — current working client that holds the
+// `deviceAuths CREATE` scope (the iOS client was disabled by Epic). Device
+// auth is created with, and consumed with, this client.
+const ANDROID_ID = '3f69e56c7649492c8cc29f1af08a8a12';
+const ANDROID_SECRET = 'b51ee9cb12234f50a69efa67ef53812e';
+const ANDROID_BASIC = Buffer.from(`${ANDROID_ID}:${ANDROID_SECRET}`).toString('base64');
 
 export { LAUNCHER_BASIC as BASIC_AUTH };
 
@@ -45,7 +46,7 @@ let cachedToken: string | null = null;
 let tokenExpiresAt: number = 0;
 
 // Exchange a Launcher access token into a Fortnite client JWT via exchange_code.
-// Defaults to the PC client; pass IOS_BASIC to get an iOS-client token.
+// Defaults to the PC client; pass ANDROID_BASIC to get an Android-client token.
 async function launcherToFortniteJWT(launcherToken: string, clientBasic: string = FN_BASIC): Promise<string | null> {
   try {
     // Step 1: Get exchange code from Launcher token
@@ -109,11 +110,11 @@ export async function createDeviceAuth(
     return { error: `Token request error: ${(e as Error).message}` };
   }
 
-  // Step 2: promote to a Fortnite iOS JWT — only the iOS client holds the
+  // Step 2: promote to a Fortnite Android JWT — only the Android client holds the
   // `deviceAuths CREATE` scope, and it's the client used to consume it later.
-  const iosToken = await launcherToFortniteJWT(launcherToken, IOS_BASIC);
-  if (!iosToken) return { error: 'Failed to obtain Fortnite iOS token for device auth creation.' };
-  const accessToken = iosToken;
+  const androidToken = await launcherToFortniteJWT(launcherToken, ANDROID_BASIC);
+  if (!androidToken) return { error: 'Failed to obtain Fortnite Android token for device auth creation.' };
+  const accessToken = androidToken;
 
   // Step 3: create the device auth on the account
   try {
@@ -154,7 +155,7 @@ export async function getEpicAccessToken(): Promise<string | null> {
     try {
       const res = await fetch(TOKEN_URL, {
         method: 'POST',
-        headers: { 'Authorization': `Basic ${IOS_BASIC}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Authorization': `Basic ${ANDROID_BASIC}`, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ grant_type: 'device_auth', account_id: accountId, device_id: deviceId, secret: deviceSecret }).toString()
       });
       if (res.ok) {
