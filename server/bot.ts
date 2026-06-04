@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, E
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService, fetchGunsmith } from './services/xbox';
+import { fetchOriginalPlatform } from './services/epicAccount';
 import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
 import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
@@ -310,6 +311,10 @@ const commands = [
     .setName('achievements')
     .setDescription('Look up the real Fortnite Gunsmith achievement unlock date for a Gamertag')
     .addStringOption(o => o.setName('gamertag').setDescription('The Xbox Gamertag').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('original_name')
+    .setDescription('Check what platform an Epic account was originally made on')
+    .addStringOption(o => o.setName('name').setDescription('Epic / Xbox / PSN name').setRequired(true)),
 ];
 
 export function formatAchievementDate(d: Date): string {
@@ -1814,6 +1819,29 @@ Thank you for your help, I hope I will hear from you soon.`;
             .setTimestamp();
           if (avatarUrl) achEmbed.setThumbnail(avatarUrl);
           await interaction.editReply({ embeds: [achEmbed] });
+          break;
+        }
+
+        case 'original_name': {
+          await interaction.deferReply();
+          const lookupName = interaction.options.getString('name', true).trim();
+          const op = await fetchOriginalPlatform(lookupName);
+          if (op.error) {
+            await interaction.editReply({ content: op.error });
+            break;
+          }
+          const opOriginalNameText = op.originalName === null ? 'Unknown' : (op.originalName ? 'Yes' : 'No');
+          const opEmbed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle(`${op.epicDisplayName} Original Name Check`)
+            .setDescription(
+              `🎮 **Name:** ${op.epicDisplayName}\n` +
+              `**Original Name:** ${opOriginalNameText}\n` +
+              `**Account originally made on:** ${op.originalPlatform}`
+            )
+            .setFooter({ text: 'Made By Honor Guard • discord.gg/honorguard' })
+            .setTimestamp();
+          await interaction.editReply({ embeds: [opEmbed] });
           break;
         }
 

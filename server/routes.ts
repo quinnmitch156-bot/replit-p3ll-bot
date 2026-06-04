@@ -8,6 +8,7 @@ import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
 import { fetchGunsmith } from "./services/xbox";
+import { fetchOriginalPlatform } from "./services/epicAccount";
 import fs from "fs";
 import path from "path";
 
@@ -363,6 +364,23 @@ export async function registerRoutes(
     if (r.error) return res.type('text/plain').send(r.error);
     if (!r.unlockedAt) return res.type('text/plain').send('🔒 Gunsmith not unlocked on this account.');
     res.type('text/plain').send(r.unlockedAt);
+  });
+
+  // Original Name Check — what platform an Epic account was ORIGINALLY made on
+  // (earliest linked external auth) + whether the name is still the original.
+  // BotGhost: GET /api/original-name?name={option_name}&key=YOUR_API_KEY
+  app.get('/api/original-name', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const name = ((req.query.name as string) || (req.query.gamertag as string) || '').trim();
+    if (!name) return res.type('text/plain').send('❌ Missing `name` query param.');
+    const r = await fetchOriginalPlatform(name);
+    if (r.error) return res.type('text/plain').send(r.error);
+    const originalNameText = r.originalName === null ? 'Unknown' : (r.originalName ? 'Yes' : 'No');
+    res.type('text/plain').send(
+      `🎮 **Name:** ${r.epicDisplayName}\n` +
+      `**Original Name:** ${originalNameText}\n` +
+      `**Account originally made on:** ${r.originalPlatform}`
+    );
   });
 
   // Check Access — checks if a member has the bot access role (BOT_ACCESS_ROLE_ID)
