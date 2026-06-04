@@ -3,7 +3,7 @@ import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
 import { xboxService, fetchGunsmith } from './services/xbox';
 import { fetchOriginalPlatform } from './services/epicAccount';
-import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
+import { getEpicAccessToken, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
 import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
