@@ -1,3 +1,4 @@
 - [check-access role lookup](check-access-architecture.md) — Discord role/member API lookups run on the Replit bot's token (not BotGhost); `Unknown Guild` = Replit bot not in server.
 - [Fortnite Gunsmith via xbl.io](xbox-achievements.md) — Gunsmith IS real (Fortnite Save the World, Xbox title id 267695549); resolve gamertag via /search not /friends/search.
-- [Epic original-platform check](epic-original-platform.md) — "originally made on" = earliest external-auth dateAdded (token-gated Epic endpoint only; prod.api-fortnite lacks dates).
+- [Epic original-platform check](epic-original-platform.md) — dateAdded is self-only now (403 18055 for other accounts); use bulk ?accountId lookup + resolution platform, no creation order.
+- [Epic 24/7 device auth](epic-device-auth.md) — create/consume device auth with the Fortnite ANDROID client (PC lacks scope, iOS is disabled by Epic).
