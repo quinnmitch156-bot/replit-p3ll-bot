@@ -385,6 +385,15 @@ export async function registerRoutes(
     if (!code) {
       return res.type('text/plain').send('❌ Missing gift-card code. Paste your Rewarble code and try again.');
     }
+    // Sanity-check the code looks real before bothering the owner. A genuine Rewarble
+    // code is a long alphanumeric string — reject junk/placeholder values up front.
+    const cleanCode = code.replace(/[^A-Za-z0-9]/g, '');
+    const junkCodes = ['test', 'testing', 'none', 'null', 'undefined', 'asdf', 'qwerty', 'abc', 'abcd', 'abcde', 'code', 'giftcard', '1234', '12345', '123456', '1234567', '12345678'];
+    if (cleanCode.length < 6 || junkCodes.includes(cleanCode.toLowerCase())) {
+      return res.type('text/plain').send(
+        '❌ **Invalid gift card code.**\n\nThat doesn\u2019t look like a real Rewarble code. Copy the **full code** exactly as it appears in your Rewarble email — letters and numbers only, no extra words or spaces — then click **Redeem** and try again.'
+      );
+    }
 
     const delivered = await dmOwnerGiftCard({ discordId, tag, product, code });
     if (!delivered) {
