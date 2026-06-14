@@ -8,6 +8,25 @@ import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
 
+// Store products for /buy — gift-card checkout flow (Rewarble Visa via G2A).
+// `access: true` products grant lifetime bot access on owner confirmation;
+// `access: false` products are services the owner fulfils manually.
+interface StoreProduct {
+  id: string;
+  label: string;
+  price: number;
+  description: string;
+  url: string;
+  access: boolean;
+}
+const STORE_PRODUCTS: StoreProduct[] = [
+  { id: 'nfa_fa',       label: 'NFA -> FA',                 price: 5,  description: 'Convert a Not-Full-Access account to Full Access', url: 'https://www.g2a.com/rewarble-visa-gift-card-5-usd-by-rewarble-key-global-i10000502992002',  access: false },
+  { id: 'expert_guide', label: 'Expert Guide',              price: 15, description: 'Personal expert pulling guide',                    url: 'https://www.g2a.com/rewarble-visa-gift-card-15-usd-by-rewarble-key-global-i10000502992012', access: false },
+  { id: 'bot_access',   label: 'Bot Access',                price: 20, description: 'Full access to all bot commands',                  url: 'https://www.g2a.com/rewarble-visa-gift-card-20-usd-by-rewarble-key-global-i10000502992006', access: true },
+  { id: 'osint_access', label: 'Osint Access',              price: 25, description: 'Access to all OSINT commands',                     url: 'https://www.g2a.com/rewarble-visa-gift-card-25-usd-by-rewarble-key-global-i10000502992003', access: true },
+  { id: 'bot_guide',    label: 'Bot Access + Expert Guide', price: 30, description: 'Full bot access plus the expert guide',            url: 'https://www.g2a.com/rewarble-visa-gift-card-30-usd-by-rewarble-key-global-i10000502992007', access: true },
+];
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages] });
 
 // Exported so routes.ts can DM the owner when a BotGhost /buy notify fires
@@ -471,21 +490,20 @@ export async function startBot() {
       if (interaction.commandName === 'buy') {
         try {
           const embed = new EmbedBuilder()
-            .setColor(0x22c55e)
-            .setTitle('Honor Guard Bot Key')
-            .setDescription('**"What is Honor Guard?"**\nHonor Guard is a discord bot used to gather information on Epic Games, Xbox & PSN accounts! This information can be used to verify the ownership of an account, allowing you too gain **full access** to the account!\n\n**Features**\n• HQ Receipts Xbox/PSN\n• Xbox AOV Command\n• PSN AOV Command\n• 15+ Total commands!\n\nWith 15+ commands, Honor Guard makes pulling easy and fast!')
-            .setThumbnail(interaction.client.user?.displayAvatarURL() || null);
+            .setColor(0x5865F2)
+            .setTitle('🛒 Store')
+            .setDescription('Select a product to continue checkout.');
 
           const row = new ActionRowBuilder<StringSelectMenuBuilder>()
             .addComponents(
               new StringSelectMenuBuilder()
-                .setCustomId('buy_select_plan')
-                .setPlaceholder('Choose a key...')
-                .addOptions([
-                  { label: '1 Month Access — $20', value: 'monthly|20|0.00020', emoji: '📅', description: 'Full access for 30 days' },
-                  { label: 'Lifetime Access — $35', value: 'lifetime|35|0.00035', emoji: '♾️', description: 'One-time payment, permanent access' },
-                  { label: 'Lifetime + Guide — $45', value: 'lifetime_guide|45|0.00045', emoji: '📖', description: 'Lifetime access + personal setup guide' },
-                ])
+                .setCustomId('store_select_product')
+                .setPlaceholder('Select a product...')
+                .addOptions(STORE_PRODUCTS.map(p => ({
+                  label: p.label,
+                  value: p.id,
+                  description: `${p.price} USD`,
+                })))
             );
 
           await interaction.reply({ embeds: [embed], components: [row] });
@@ -1891,138 +1909,64 @@ Thank you for your help, I hope I will hear from you soon.`;
         });
       }
 
-      if (interaction.customId === 'buy_select_plan') {
-        const val = interaction.values[0]; // e.g. "monthly|20|0.00020"
-        const [planType, usdAmount, btcAmount] = val.split('|');
-
-        const planLabel = planType === 'monthly' ? '1 Month Access'
-          : planType === 'lifetime' ? 'Lifetime Access'
-          : 'Lifetime Access + Guide';
-
-        const methodEmbed = new EmbedBuilder()
-          .setColor(0x22c55e)
-          .setTitle('Select a payment method')
-          .setDescription(`You selected **${planLabel}** — **$${usdAmount}.00 USD**\n\nChoose how you'd like to pay below.`);
-
-        const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-          .addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId(`buy_payment_method|${planType}|${usdAmount}|${btcAmount}`)
-              .setPlaceholder('Select a payment method...')
-              .addOptions([
-                { label: 'PayPal', value: 'paypal', emoji: '💳', description: 'Pay with PayPal (Friends & Family)' },
-                { label: 'Bitcoin', value: 'bitcoin', emoji: '🪙', description: 'Pay with BTC' },
-              ])
-          );
-
-        await interaction.reply({ embeds: [methodEmbed], components: [row] });
-        return;
-      }
-
-      if (interaction.customId.startsWith('buy_payment_method|')) {
-        const [, planType, usdAmount, btcAmount] = interaction.customId.split('|');
-        const method = interaction.values[0]; // "paypal" or "bitcoin"
-
-        const planLabel = planType === 'monthly' ? '1 Month Access'
-          : planType === 'lifetime' ? 'Lifetime Access'
-          : 'Lifetime Access + Guide';
-
-        const PAYPAL_EMAIL = 'federalisgone@gmail.com';
-        const BTC_ADDRESS = 'bc1qlx7wdngc04vgdup90mh7rdd7x7u50mcj9vt5qx';
-        const orderNote = `HG-${interaction.user.id.slice(-6).toUpperCase()}-${planType.toUpperCase()}`;
-
-        let payEmbed: EmbedBuilder;
-        if (method === 'paypal') {
-          payEmbed = new EmbedBuilder()
-            .setColor(0x22c55e)
-            .setTitle('Complete Your Order | PayPal')
-            .addFields(
-              { name: 'PayPal Note', value: `**NOTE IS REQUIRED**\n\`${orderNote}\``, inline: false },
-              { name: 'Amount', value: `\`$${usdAmount}.00 USD\``, inline: false },
-              { name: 'PayPal Email', value: `\`${PAYPAL_EMAIL}\``, inline: false },
-              { name: 'Plan', value: `**${planLabel}**`, inline: false },
-              { name: '⚠️ Important', value: 'Send as **Friends & Family**. Include the note **exactly** as shown. After payment, click **"I\'ve Paid"** below.', inline: false }
-            )
-            .setFooter({ text: 'Honor Guard • Payments are final and non-refundable' });
-        } else {
-          payEmbed = new EmbedBuilder()
-            .setColor(0xF7931A)
-            .setTitle('Complete Your Order | Bitcoin')
-            .addFields(
-              { name: 'Order Note', value: `\`${orderNote}\``, inline: false },
-              { name: 'Amount', value: `**$${usdAmount}.00 USD** \\| **${btcAmount} BTC**`, inline: false },
-              { name: 'Bitcoin Address', value: `\`${BTC_ADDRESS}\``, inline: false },
-              { name: 'Plan', value: `**${planLabel}**`, inline: false },
-              { name: '⚠️ Important', value: `Send **exactly ${btcAmount} BTC** to the address above. After payment, click **"I've Paid"** below.`, inline: false }
-            )
-            .setFooter({ text: 'Honor Guard • BTC payments are final and non-refundable' });
+      if (interaction.customId === 'store_select_product') {
+        const productId = interaction.values[0];
+        const product = STORE_PRODUCTS.find(p => p.id === productId);
+        if (!product) {
+          await interaction.reply({ content: 'Unknown product. Please run /buy again.', ephemeral: true });
+          return;
         }
 
-        const paidButton = new ButtonBuilder()
-          .setCustomId(`paid|${planType}|${method}`)
-          .setLabel('✅ I\'ve Paid')
-          .setStyle(ButtonStyle.Success);
+        const checkoutEmbed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle(`🛒 Checkout - ${product.label}`)
+          .setDescription(
+            `💰 **Price:** ${product.price} USD\n\n` +
+            '1️⃣ Purchase the giftcard\n' +
+            '2️⃣ Find Display key\n' +
+            '3️⃣ Copy it\n' +
+            '4️⃣ Redeem it here'
+          );
 
-        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(paidButton);
-        await interaction.reply({ embeds: [payEmbed], components: [row] });
+        const redeemBtn = new ButtonBuilder()
+          .setCustomId(`store_redeem|${product.id}`)
+          .setLabel('Redeem')
+          .setStyle(ButtonStyle.Success);
+        const payBtn = new ButtonBuilder()
+          .setLabel('Pay Now')
+          .setStyle(ButtonStyle.Link)
+          .setURL(product.url)
+          .setEmoji('💳');
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(redeemBtn, payBtn);
+        await interaction.reply({ embeds: [checkoutEmbed], components: [row], ephemeral: true });
         return;
       }
     }
 
     if (interaction.isButton()) {
-      if (interaction.customId.startsWith('paid|')) {
-        const [, planType, method] = interaction.customId.split('|');
-        const planLabel = planType === 'monthly' ? '1 Month Access'
-          : planType === 'lifetime' ? 'Lifetime Access'
-          : 'Lifetime Access + Guide';
-        const methodLabel = method === 'paypal' ? 'PayPal' : 'Bitcoin';
-
-        // DM the owner with a Grant button
-        const ownerId = process.env.OWNER_ID;
-        if (ownerId) {
-          try {
-            const ownerUser = await interaction.client.users.fetch(ownerId);
-            const ownerEmbed = new EmbedBuilder()
-              .setColor(0xF7931A)
-              .setTitle(`💰 New ${methodLabel} Payment Claim`)
-              .setDescription(`A user has claimed they sent a payment and is awaiting their key.`)
-              .addFields(
-                { name: 'User', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
-                { name: 'User ID', value: `\`${interaction.user.id}\``, inline: true },
-                { name: 'Plan', value: `**${planLabel}**`, inline: true },
-                { name: 'Payment Method', value: `**${methodLabel}**`, inline: true },
-                { name: 'Order Note', value: `\`HG-${interaction.user.id.slice(-6).toUpperCase()}-${planType.toUpperCase()}\``, inline: false },
-                { name: 'Action', value: `Verify the payment, then click **Grant Key** below. A redeem key will be generated and DM\u2019d to the buyer.`, inline: false }
-              )
-              .setFooter({ text: 'Honor Guard • Verify payment before granting' })
-              .setTimestamp();
-
-            const grantBtn = new ButtonBuilder()
-              .setCustomId(`grant_key|${interaction.user.id}|${planType}`)
-              .setLabel('✅ Grant Key')
-              .setStyle(ButtonStyle.Success);
-            const rejectBtn = new ButtonBuilder()
-              .setCustomId(`reject_payment|${interaction.user.id}`)
-              .setLabel('❌ Reject')
-              .setStyle(ButtonStyle.Danger);
-            const ownerRow = new ActionRowBuilder<ButtonBuilder>().addComponents(grantBtn, rejectBtn);
-
-            await ownerUser.send({ embeds: [ownerEmbed], components: [ownerRow] });
-          } catch (err) {
-            console.error('Could not DM owner:', err);
-          }
+      // Buyer clicks "Redeem" → open the gift-card code modal
+      if (interaction.customId.startsWith('store_redeem|')) {
+        const productId = interaction.customId.split('|')[1];
+        const product = STORE_PRODUCTS.find(p => p.id === productId);
+        if (!product) {
+          await interaction.reply({ content: 'Unknown product. Please run /buy again.', ephemeral: true });
+          return;
         }
 
-        await interaction.reply({
-          embeds: [
-            new EmbedBuilder()
-              .setColor(0x22c55e)
-              .setTitle('✅ Payment Claim Submitted')
-              .setDescription(`Your **${methodLabel}** payment claim for **${planLabel}** has been submitted.\n\nThe owner will verify your payment and DM you a **redeem key**. Once received, use \`/redeem [key]\` to activate your access.\n\nThis usually takes **5–15 minutes**.`)
-              .setFooter({ text: 'Honor Guard • Do not send again — wait for confirmation' })
-          ],
-          ephemeral: true
-        });
+        const modal = new ModalBuilder()
+          .setCustomId(`store_redeem_modal|${product.id}`)
+          .setTitle('Redeem Gift Card');
+
+        const codeInput = new TextInputBuilder()
+          .setCustomId('giftcard_code')
+          .setLabel('Rewarble Code')
+          .setPlaceholder('Enter your gift card code')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(codeInput));
+        await interaction.showModal(modal);
         return;
       }
 
@@ -2102,6 +2046,94 @@ Thank you for your help, I hope I will hear from you soon.`;
         });
         return;
       }
+
+      // Owner confirms a gift-card redemption → grant access + notify buyer
+      if (interaction.customId.startsWith('store_grant|')) {
+        const ownerId = process.env.OWNER_ID;
+        if (interaction.user.id !== ownerId) {
+          await interaction.reply({ content: 'Only the owner can use this button.', ephemeral: true });
+          return;
+        }
+        const [, buyerId, productId] = interaction.customId.split('|');
+        const product = STORE_PRODUCTS.find(p => p.id === productId);
+        const label = product?.label || 'your order';
+
+        let grantNote: string;
+        if (product?.access) {
+          let dbBuyer = await storage.getUserByDiscordId(buyerId);
+          if (!dbBuyer) {
+            let username = buyerId;
+            try { username = (await interaction.client.users.fetch(buyerId)).username; } catch {}
+            dbBuyer = await storage.createUser({ discordId: buyerId, username, role: 'user', subscriptionTier: null, subscriptionExpiresAt: null });
+          }
+          await storage.updateUserSubscription(dbBuyer.id, 'lifetime', null);
+          grantNote = '**Lifetime access granted.**';
+        } else {
+          grantNote = '**Deliver the product to the buyer manually.**';
+        }
+
+        let dmStatus = '✅ Buyer notified.';
+        try {
+          const buyer = await interaction.client.users.fetch(buyerId);
+          await buyer.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0x22c55e)
+                .setTitle('🎉 Purchase Confirmed')
+                .setDescription(
+                  product?.access
+                    ? `Your payment for **${label}** has been verified — you now have **full access** to the bot. Enjoy!`
+                    : `Your payment for **${label}** has been verified. The owner will deliver your order shortly.`
+                )
+                .setFooter({ text: 'Honor Guard • Thank you for your purchase' })
+            ]
+          });
+        } catch {
+          dmStatus = '⚠️ Could not DM buyer (DMs closed).';
+        }
+
+        await interaction.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x22c55e)
+              .setTitle('✅ Order Granted')
+              .setDescription(`${dmStatus}\n\n**Product:** ${label}\n**Buyer:** <@${buyerId}>\n${grantNote}`)
+          ],
+          components: []
+        });
+        return;
+      }
+
+      // Owner rejects a gift-card redemption
+      if (interaction.customId.startsWith('store_reject|')) {
+        const ownerId = process.env.OWNER_ID;
+        if (interaction.user.id !== ownerId) {
+          await interaction.reply({ content: 'Only the owner can use this button.', ephemeral: true });
+          return;
+        }
+        const buyerId = interaction.customId.split('|')[1];
+        try {
+          const buyer = await interaction.client.users.fetch(buyerId);
+          await buyer.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle('❌ Gift Card Not Verified')
+                .setDescription('Your submitted gift card code could not be verified. Please double-check the code, or contact the owner directly if you believe this is a mistake.')
+            ]
+          });
+        } catch {}
+        await interaction.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0xff0000)
+              .setTitle('❌ Order Rejected')
+              .setDescription(`<@${buyerId}> has been notified.`)
+          ],
+          components: []
+        });
+        return;
+      }
     }
 
     if (interaction.isModalSubmit()) {
@@ -2120,6 +2152,68 @@ Thank you for your help, I hope I will hear from you soon.`;
           console.error('xbox_receipt_modal error:', err);
           await interaction.editReply({ content: '❌ Failed to generate receipt. Please check your inputs and try again.' });
         }
+        return;
+      }
+
+      // Buyer submits a gift-card code → forward to owner for verification
+      if (interaction.customId.startsWith('store_redeem_modal|')) {
+        const productId = interaction.customId.split('|')[1];
+        const product = STORE_PRODUCTS.find(p => p.id === productId);
+        const code = interaction.fields.getTextInputValue('giftcard_code').trim();
+        const label = product?.label || 'Unknown product';
+        const price = product ? `${product.price} USD` : '—';
+
+        const ownerId = process.env.OWNER_ID;
+        let delivered = false;
+        if (ownerId) {
+          try {
+            const ownerUser = await interaction.client.users.fetch(ownerId);
+            const ownerEmbed = new EmbedBuilder()
+              .setColor(0xF7931A)
+              .setTitle('🛒 New Gift Card Redemption')
+              .addFields(
+                { name: 'Buyer', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
+                { name: 'Buyer ID', value: `\`${interaction.user.id}\``, inline: true },
+                { name: 'Product', value: `**${label}**`, inline: true },
+                { name: 'Price', value: `**${price}**`, inline: true },
+                { name: 'Rewarble Code', value: `\`\`\`${code}\`\`\``, inline: false },
+                { name: 'Action', value: 'Redeem the code on Rewarble, then click **Grant** to confirm the order or **Reject** if invalid.', inline: false }
+              )
+              .setFooter({ text: 'Honor Guard • Verify the code before granting' })
+              .setTimestamp();
+
+            const grantBtn = new ButtonBuilder()
+              .setCustomId(`store_grant|${interaction.user.id}|${productId}`)
+              .setLabel('✅ Grant')
+              .setStyle(ButtonStyle.Success);
+            const rejectBtn = new ButtonBuilder()
+              .setCustomId(`store_reject|${interaction.user.id}`)
+              .setLabel('❌ Reject')
+              .setStyle(ButtonStyle.Danger);
+            const ownerRow = new ActionRowBuilder<ButtonBuilder>().addComponents(grantBtn, rejectBtn);
+
+            await ownerUser.send({ embeds: [ownerEmbed], components: [ownerRow] });
+            delivered = true;
+          } catch (err) {
+            console.error('store_redeem_modal: could not DM owner:', err);
+          }
+        }
+
+        await interaction.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(delivered ? 0x22c55e : 0xff0000)
+              .setTitle(delivered ? '✅ Gift Card Submitted' : '⚠️ Submission Issue')
+              .setDescription(
+                delivered
+                  ? `Your gift card code for **${label}** has been submitted for verification.\n\nThe owner will verify it and confirm your order shortly. This usually takes **5–15 minutes**.`
+                  : 'Could not reach the owner to submit your code right now. Please try again later or contact the owner directly.'
+              )
+              .setFooter({ text: 'Honor Guard • Do not submit again — wait for confirmation' })
+          ],
+          ephemeral: true
+        });
+        return;
       }
     }
   });
