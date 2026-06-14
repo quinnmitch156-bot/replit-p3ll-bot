@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startBot, dmOwner, dmOwnerPaymentClaim, translateToEnglish, friendBomb, formatAchievementDate, hasBotAccessRole } from "./bot";
+import { startBot, dmOwner, dmOwnerPaymentClaim, dmOwnerGiftCard, findStoreProduct, STORE_PRODUCTS, translateToEnglish, friendBomb, formatAchievementDate, hasBotAccessRole } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { generateXboxReceipt } from "./services/receiptGenerator";
@@ -318,6 +318,81 @@ export async function registerRoutes(
 
     res.type('text/plain').send(
       `✅ ${methodLabel} payment claim submitted for **${planLabel}**!\n\nThe owner will verify your payment and DM you a **redeem key**. Once received, use \`/redeem key:HG-...\` to activate your access.\n\nThis usually takes **5–15 min**. Do NOT send again — just wait for confirmation.`
+    );
+  });
+
+  // ─── BotGhost gift-card store endpoints (Rewarble / G2A) ─────────────────────
+
+  // List all products — handy when setting up the BotGhost dropdown options.
+  // BotGhost: GET /api/buy/products?key=YOUR_API_KEY
+  app.get('/api/buy/products', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const lines = STORE_PRODUCTS.map(p => `• ${p.label} — $${p.price} (id: \`${p.id}\`)\n   ${p.description}\n   Pay: ${p.url}`);
+    res.type('text/plain').send(`🛒 **Store Products**\n\n${lines.join('\n\n')}`);
+  });
+
+  function buildCheckoutResponse(productKey: string): string {
+    const p = findStoreProduct(productKey);
+    if (!p) {
+      const valid = STORE_PRODUCTS.map(x => x.id).join(', ');
+      return `❌ Invalid product "${productKey}". Choose one of: ${valid}`;
+    }
+    return [
+      `🛒 **Checkout — ${p.label}**`,
+      '',
+      `**Price:** $${p.price} USD`,
+      p.description,
+      '',
+      '**How to pay:**',
+      `**1.** Click **Pay Now** to buy a Rewarble Visa gift card for $${p.price}.`,
+      '**2.** Copy the gift-card code you receive by email.',
+      '**3.** Come back here and click **Redeem**, then paste your code.',
+      '**4.** The owner verifies the code and your access is granted automatically.',
+      '',
+      `🔗 **Pay Now:** ${p.url}`,
+    ].join('\n');
+  }
+
+  // Step 1 — checkout details for one product (price + steps + Pay Now link).
+  // BotGhost: GET /api/buy/checkout/{option_product}?key=YOUR_API_KEY
+  app.get('/api/buy/checkout/:product', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    res.type('text/plain').send(buildCheckoutResponse((req.params.product || '')));
+  });
+  // BotGhost: GET /api/buy/checkout?product={option_product}&key=YOUR_API_KEY
+  app.get('/api/buy/checkout', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    res.type('text/plain').send(buildCheckoutResponse((req.query.product as string || '')));
+  });
+
+  // Step 2 — buyer submits their Rewarble code; DMs the owner with Grant / Reject buttons.
+  // BotGhost: GET /api/buy/redeem?product={option_product}&code={option_code}&discord_id={user_id}&tag={user_username}&key=YOUR_API_KEY
+  app.get('/api/buy/redeem', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const productKey = (req.query.product as string || '');
+    const code = (req.query.code as string || '').trim();
+    const discordId = (req.query.discord_id as string || '').trim();
+    const tag = (req.query.tag as string || 'unknown');
+
+    const product = findStoreProduct(productKey);
+    if (!product) {
+      const valid = STORE_PRODUCTS.map(x => x.id).join(', ');
+      return res.type('text/plain').send(`❌ Invalid product "${productKey}". Choose one of: ${valid}`);
+    }
+    if (!/^\d{5,30}$/.test(discordId)) {
+      return res.type('text/plain').send('❌ Missing or invalid Discord user ID. (BotGhost should pass `{user_id}` as `discord_id`.)');
+    }
+    if (!code) {
+      return res.type('text/plain').send('❌ Missing gift-card code. Paste your Rewarble code and try again.');
+    }
+
+    const delivered = await dmOwnerGiftCard({ discordId, tag, product, code });
+    if (!delivered) {
+      return res.type('text/plain').send('❌ Could not reach the owner right now. Please try again in a moment.');
+    }
+
+    res.type('text/plain').send(
+      `✅ Your code for **${product.label}** was submitted!\n\nThe owner is verifying it now. ${product.access ? 'Once approved, your access is granted automatically — no key needed.' : 'Once approved, the owner will deliver your order directly.'}\n\nThis usually takes **5–15 min**. Do NOT submit again — just wait for confirmation.`
     );
   });
 

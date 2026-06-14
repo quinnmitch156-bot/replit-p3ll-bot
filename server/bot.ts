@@ -19,7 +19,7 @@ interface StoreProduct {
   url: string;
   access: boolean;
 }
-const STORE_PRODUCTS: StoreProduct[] = [
+export const STORE_PRODUCTS: StoreProduct[] = [
   { id: 'nfa_fa',       label: 'NFA -> FA',                 price: 5,  description: 'Convert a Not-Full-Access account to Full Access', url: 'https://www.g2a.com/rewarble-visa-gift-card-5-usd-by-rewarble-key-global-i10000502992002',  access: false },
   { id: 'expert_guide', label: 'Expert Guide',              price: 15, description: 'Personal expert pulling guide',                    url: 'https://www.g2a.com/rewarble-visa-gift-card-15-usd-by-rewarble-key-global-i10000502992012', access: false },
   { id: 'bot_access',   label: 'Bot Access',                price: 20, description: 'Full access to all bot commands',                  url: 'https://www.g2a.com/rewarble-visa-gift-card-20-usd-by-rewarble-key-global-i10000502992006', access: true },
@@ -84,6 +84,51 @@ export async function dmOwnerPaymentClaim(opts: { discordId: string; tag: string
     await owner.send({ embeds: [embed], components: [row] });
   } catch (err) {
     console.error('dmOwnerPaymentClaim error:', err);
+  }
+}
+
+// Resolve a store product by its id (e.g. "bot_access") or by its label (e.g. "Bot Access")
+export function findStoreProduct(idOrLabel: string): StoreProduct | undefined {
+  const needle = (idOrLabel || '').trim().toLowerCase();
+  return STORE_PRODUCTS.find(p => p.id.toLowerCase() === needle || p.label.toLowerCase() === needle);
+}
+
+// DM the owner a gift-card redemption with Grant / Reject buttons (used by BotGhost /api/buy/redeem).
+// Reuses the native bot's store_grant|/store_reject| interaction handlers. Returns true if delivered.
+export async function dmOwnerGiftCard(opts: { discordId: string; tag: string; product: StoreProduct; code: string }): Promise<boolean> {
+  const ownerId = process.env.OWNER_ID;
+  if (!ownerId) return false;
+  try {
+    const owner = await client.users.fetch(ownerId);
+    const embed = new EmbedBuilder()
+      .setColor(0xF7931A)
+      .setTitle('🛒 New Gift Card Redemption')
+      .addFields(
+        { name: 'Buyer', value: `${opts.tag} (<@${opts.discordId}>)`, inline: true },
+        { name: 'Buyer ID', value: `\`${opts.discordId}\``, inline: true },
+        { name: 'Product', value: `**${opts.product.label}**`, inline: true },
+        { name: 'Price', value: `**${opts.product.price} USD**`, inline: true },
+        { name: 'Rewarble Code', value: `\`\`\`${opts.code}\`\`\``, inline: false },
+        { name: 'Action', value: 'Redeem the code on Rewarble, then click **Grant** to confirm the order or **Reject** if invalid.', inline: false }
+      )
+      .setFooter({ text: 'Galaxy Bot • Verify the code before granting' })
+      .setTimestamp();
+
+    const grantBtn = new ButtonBuilder()
+      .setCustomId(`store_grant|${opts.discordId}|${opts.product.id}`)
+      .setLabel('✅ Grant')
+      .setStyle(ButtonStyle.Success);
+    const rejectBtn = new ButtonBuilder()
+      .setCustomId(`store_reject|${opts.discordId}`)
+      .setLabel('❌ Reject')
+      .setStyle(ButtonStyle.Danger);
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(grantBtn, rejectBtn);
+
+    await owner.send({ embeds: [embed], components: [row] });
+    return true;
+  } catch (err) {
+    console.error('dmOwnerGiftCard error:', err);
+    return false;
   }
 }
 
