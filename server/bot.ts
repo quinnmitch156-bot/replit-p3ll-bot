@@ -87,10 +87,31 @@ export async function dmOwnerPaymentClaim(opts: { discordId: string; tag: string
   }
 }
 
-// Resolve a store product by its id (e.g. "bot_access") or by its label (e.g. "Bot Access")
+// Resolve a store product from whatever BotGhost sends. Tolerant of:
+//   - the id              ("bot_access")
+//   - the label           ("Bot Access", "NFA -> FA")
+//   - label + price       ("Bot Access — $20", "Bot Access - $20", "Bot Access ($20)")
+//   - different casing / spacing / punctuation
 export function findStoreProduct(idOrLabel: string): StoreProduct | undefined {
-  const needle = (idOrLabel || '').trim().toLowerCase();
-  return STORE_PRODUCTS.find(p => p.id.toLowerCase() === needle || p.label.toLowerCase() === needle);
+  const raw = (idOrLabel || '').trim();
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase();
+
+  // 1) exact id or label match
+  let p = STORE_PRODUCTS.find(x => x.id.toLowerCase() === lower || x.label.toLowerCase() === lower);
+  if (p) return p;
+
+  // 2) normalized (alphanumeric-only) prefix match, longest label first so
+  //    "Bot Access + Expert Guide" wins over "Bot Access".
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const n = norm(raw);
+  if (!n) return undefined;
+  const candidates = [...STORE_PRODUCTS].sort((a, b) => b.label.length - a.label.length);
+  return candidates.find(x => {
+    const id = norm(x.id);
+    const label = norm(x.label);
+    return n === id || n === label || n.startsWith(id) || n.startsWith(label);
+  });
 }
 
 // DM the owner a gift-card redemption with Grant / Reject buttons (used by BotGhost /api/buy/redeem).

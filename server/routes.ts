@@ -334,8 +334,9 @@ export async function registerRoutes(
   function buildCheckoutResponse(productKey: string): string {
     const p = findStoreProduct(productKey);
     if (!p) {
-      const valid = STORE_PRODUCTS.map(x => x.id).join(', ');
-      return `❌ Invalid product "${productKey}". Choose one of: ${valid}`;
+      const valid = STORE_PRODUCTS.map(x => `${x.id} ($${x.price})`).join(', ');
+      const got = (productKey && productKey.trim()) ? `\`${productKey}\`` : '*(nothing was sent — the product option came through empty)*';
+      return `❌ Couldn't match product ${got}.\n\nIn BotGhost, the \`product\` value you send must be one of: ${valid}`;
     }
     return [
       `🛒 **Checkout — ${p.label}**`,
@@ -362,6 +363,7 @@ export async function registerRoutes(
   // BotGhost: GET /api/buy/checkout?product={option_product}&key=YOUR_API_KEY
   app.get('/api/buy/checkout', async (req, res) => {
     if (!checkKey(req, res)) return;
+    console.log('[buy/checkout] received product =', JSON.stringify(req.query.product));
     res.type('text/plain').send(buildCheckoutResponse((req.query.product as string || '')));
   });
 
@@ -374,10 +376,12 @@ export async function registerRoutes(
     const discordId = (req.query.discord_id as string || '').trim();
     const tag = (req.query.tag as string || 'unknown');
 
+    console.log('[buy/redeem] received product =', JSON.stringify(req.query.product), '| code len =', code.length);
     const product = findStoreProduct(productKey);
     if (!product) {
-      const valid = STORE_PRODUCTS.map(x => x.id).join(', ');
-      return res.type('text/plain').send(`❌ Invalid product "${productKey}". Choose one of: ${valid}`);
+      const valid = STORE_PRODUCTS.map(x => `${x.id} ($${x.price})`).join(', ');
+      const got = (productKey && productKey.trim()) ? `\`${productKey}\`` : '*(nothing was sent — the product option came through empty)*';
+      return res.type('text/plain').send(`❌ Couldn't match product ${got}.\n\nIn BotGhost, the \`product\` value you send must be one of: ${valid}`);
     }
     if (!/^\d{5,30}$/.test(discordId)) {
       return res.type('text/plain').send('❌ Missing or invalid Discord user ID. (BotGhost should pass `{user_id}` as `discord_id`.)');
