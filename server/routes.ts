@@ -6,6 +6,7 @@ import { z } from "zod";
 import { startBot, dmOwner, dmOwnerPaymentClaim, dmOwnerGiftCard, findStoreProduct, STORE_PRODUCTS, translateToEnglish, friendBomb, formatAchievementDate, hasBotAccessRole } from "./bot";
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
+import { lookupPsnProfile } from "./services/psn";
 import { generateXboxReceipt } from "./services/receiptGenerator";
 import { fetchGunsmith } from "./services/xbox";
 import { fetchOriginalPlatform } from "./services/epicAccount";
@@ -244,6 +245,49 @@ export async function registerRoutes(
       res.type('text/plain').send(info);
     } else {
       res.type('text/plain').send(`❌ No IP found for: ${name}`);
+    }
+  });
+
+  // PSN Profile Lookup — full PlayStation Network profile by gamertag
+  // BotGhost: GET /api/psn/lookup/{gamertag}?key=YOUR_API_KEY
+  app.get('/api/psn/lookup/:gamertag', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const gamertag = req.params.gamertag;
+    console.log('[psn/lookup] gamertag:', gamertag);
+    try {
+      const p = await lookupPsnProfile(gamertag);
+      if (!p.found) {
+        return res.status(404).json({ found: false, error: p.error || `No PSN account found for "${gamertag}"` });
+      }
+      res.json({
+        found: true,
+        online_id: p.onlineId,
+        account_id: p.accountId,
+        avatar_url: p.avatarUrl || null,
+        about_me: p.aboutMe || 'N/A',
+        ps_plus: p.isPlus ? 'Yes' : 'No',
+        verified: p.isVerified ? 'Yes' : 'No',
+        country: p.country || 'N/A',
+        region: p.region || p.country || 'N/A',
+        online_status: p.onlineStatus || 'Unknown',
+        platform: p.platform || 'N/A',
+        last_online: p.lastOnlineDate || 'N/A',
+        now_playing: p.nowPlaying || 'N/A',
+        trophy_level: p.trophyLevel || 'N/A',
+        trophy_tier: p.trophyTier ?? 'N/A',
+        trophies_total: p.trophies.total,
+        trophies_platinum: p.trophies.platinum,
+        trophies_gold: p.trophies.gold,
+        trophies_silver: p.trophies.silver,
+        trophies_bronze: p.trophies.bronze,
+        friend_count: p.friendCount,
+        friends: p.friendNames.join(', ') || 'N/A',
+        devices: p.devices.join(', ') || 'Unknown',
+        recent_games: p.topGames.map((g) => `${g.name} (${g.platform}) ${g.progress}%`).join(' | ') || 'N/A',
+      });
+    } catch (e) {
+      console.error('[psn/lookup] error:', e);
+      res.status(500).json({ found: false, error: 'Internal error during PSN lookup' });
     }
   });
 

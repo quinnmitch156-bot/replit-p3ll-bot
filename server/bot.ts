@@ -4,6 +4,7 @@ import { fortniteService } from './services/fortnite';
 import { xboxService, fetchGunsmith } from './services/xbox';
 import { fetchOriginalPlatform } from './services/epicAccount';
 import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
+import { lookupPsnProfile } from './services/psn';
 import { generateXboxReceipt } from './services/receiptGenerator';
 import { format } from 'date-fns';
 import { randomBytes } from 'crypto';
@@ -293,6 +294,10 @@ const commands = [
     .setName('psn_ip')
     .setDescription('Get The IP Address from an PSN Gamertag')
     .addStringOption(option => option.setName('psn_id').setDescription('PSN ID').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('psn_lookup')
+    .setDescription('Full PlayStation Network profile lookup by gamertag')
+    .addStringOption(option => option.setName('gamertag').setDescription('PSN gamertag / Online ID').setRequired(true)),
   new SlashCommandBuilder()
     .setName('psn_stw_receipt')
     .setDescription('Generates a PlayStation receipt for STW')
@@ -993,6 +998,64 @@ export async function startBot() {
           } catch (error) {
             console.error('Epic Lookup Error:', error);
             await interaction.editReply({ content: 'An error occurred during Epic Games lookup.' });
+          }
+          break;
+        }
+
+        case 'psn_lookup': {
+          const psnGamertag = interaction.options.getString('gamertag', true).trim();
+          await interaction.deferReply();
+          try {
+            const p = await lookupPsnProfile(psnGamertag);
+            if (!p.found) {
+              await interaction.editReply({ content: `❌ ${p.error || `Could not find PSN account: **${psnGamertag}**`}` });
+              break;
+            }
+
+            const statusEmoji = p.onlineStatus?.toLowerCase() === 'online' ? '🟢' : '⚫';
+            const statusText = `${statusEmoji} ${p.onlineStatus || 'Unknown'}${p.platform && p.platform !== 'N/A' ? ` (${p.platform})` : ''}`;
+            const tr = p.trophies;
+            const trophyText = `🏆 **${tr.total}** total\n<:platinum:0> Platinum: **${tr.platinum}**\n🥇 Gold: **${tr.gold}**\n🥈 Silver: **${tr.silver}**\n🥉 Bronze: **${tr.bronze}**`
+              .replace('<:platinum:0> ', '◽ ');
+            const levelText = p.trophyTier ? `Level **${p.trophyLevel}** (Tier ${p.trophyTier})` : `Level **${p.trophyLevel}**`;
+
+            embed.setTitle(`🎮 PSN Profile: ${p.onlineId}`)
+                 .addFields(
+                   { name: 'Online ID', value: `\`${p.onlineId}\``, inline: true },
+                   { name: 'Account ID', value: `\`${p.accountId}\``, inline: true },
+                   { name: 'PS Plus', value: p.isPlus ? '✅ Yes' : '❌ No', inline: true },
+                   { name: 'Status', value: statusText, inline: true },
+                   { name: 'Now Playing', value: p.nowPlaying && p.nowPlaying !== 'N/A' ? p.nowPlaying : '—', inline: true },
+                   { name: 'Region', value: p.region || p.country || 'Unknown', inline: true },
+                   { name: 'Verified', value: p.isVerified ? '✅' : '❌', inline: true },
+                   { name: 'Devices', value: p.devices.length ? p.devices.join(', ') : 'Unknown', inline: true },
+                   { name: 'Last Online', value: p.lastOnlineDate && p.lastOnlineDate !== 'N/A' ? new Date(p.lastOnlineDate).toLocaleString() : '—', inline: true },
+                   { name: 'Trophy Level', value: levelText, inline: false },
+                   { name: 'Trophies', value: trophyText, inline: false },
+                 );
+
+            if (p.avatarUrl) embed.setThumbnail(p.avatarUrl);
+            if (p.aboutMe && p.aboutMe.trim()) {
+              embed.setDescription(`*"${p.aboutMe.slice(0, 300)}"*`);
+            }
+
+            const friendsValue = p.friendCount > 0
+              ? `**${p.friendCount}** total${p.friendNames.length ? `\n${p.friendNames.map((n) => `• \`${n}\``).join('\n')}${p.friendCount > p.friendNames.length ? `\n*...and more*` : ''}` : ''}`
+              : 'None or private';
+            embed.addFields({ name: '👥 Friends', value: friendsValue.slice(0, 1024), inline: false });
+
+            if (p.topGames.length) {
+              const gamesValue = p.topGames.map((g) =>
+                `**${g.name}** ${g.platform ? `(${g.platform})` : ''} — ${g.progress}% · 🏆 ${g.earned.platinum}P/${g.earned.gold}G/${g.earned.silver}S/${g.earned.bronze}B`
+              ).join('\n').slice(0, 1024);
+              embed.addFields({ name: '🕹️ Recent Games', value: gamesValue, inline: false });
+            }
+
+            embed.setFooter({ text: 'Made by Xyn' });
+            await interaction.editReply({ embeds: [embed] });
+          } catch (error) {
+            console.error('PSN Lookup Error:', error);
+            await interaction.editReply({ content: 'An error occurred during PSN lookup.' });
           }
           break;
         }
