@@ -4,3 +4,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+.psn_refresh_token
+.epic_refresh_token
+.psn_*
+.epic_*

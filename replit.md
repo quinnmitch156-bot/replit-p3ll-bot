@@ -18,6 +18,7 @@ A Discord bot for Epic Games / Xbox / PSN account OSINT, Fortnite stats, receipt
 - `/fortnite_stats [username]` — Fortnite BR stats (solo/duo/squad wins, matches, kills)
 
 ### PSN
+- `/psn_lookup [gamertag]` — Full PSN profile: avatar, account ID, about me, online status/now playing, region, trophies, friends, linked devices, recent games (trophies/presence/friends only visible if the target is a friend of the bot's PSN account or has privacy set to "Anyone" — a Sony restriction)
 - `/psn_ip [psn_id]` — Resolve PSN ID to IP
 - `/psn_aov [psn_name] [ip]` — Generate PSN AOV script
 - `/psn_vbucks_receipt` — Generate PSN V-Bucks receipt
@@ -48,6 +49,7 @@ A Discord bot for Epic Games / Xbox / PSN account OSINT, Fortnite stats, receipt
 | `EPIC_ACCOUNT_ID` | Device Auth — Epic account ID (permanent) |
 | `EPIC_DEVICE_ID` | Device Auth — device ID (permanent) |
 | `EPIC_DEVICE_SECRET` | Device Auth — device secret (permanent) |
+| `NPSSO` | PlayStation NPSSO token for `/psn_lookup` (auto-refreshes; refresh token persisted to `.psn_refresh_token`) |
 | `XBL_IO_API_KEY` | xbl.io API key for Xbox lookup counts |
 | `Authorization` | Snusbase API key for OSINT commands |
 | `BOT_ACCESS_ROLE_ID` | Discord role ID that bypasses subscription check |
