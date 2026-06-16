@@ -410,6 +410,77 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/fortnite/clear-friends?key=YOUR_API_KEY  — body { authCode }
+  app.post('/api/fortnite/clear-friends', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const authCode = (req.body?.authCode || '').toString().trim();
+    if (!authCode) {
+      return res.json({ message: '❌ Invalid auth code. Please generate a new one and try again.' });
+    }
+    try {
+      const token = await getTokenFromAuthCode(authCode);
+      const friendsRes = await fetch(
+        `https://friends-public-service-prod06.ol.epicgames.com/friends/api/v1/${token.account_id}/friends`,
+        { headers: { Authorization: `Bearer ${token.access_token}` } },
+      );
+      const friends = (await friendsRes.json()) as Array<Record<string, unknown>>;
+
+      if (!Array.isArray(friends) || friends.length === 0) {
+        return res.json({ message: `✅ **${token.displayName}** has no friends to remove.` });
+      }
+
+      const results = await Promise.allSettled(
+        friends.map((f) =>
+          fetch(
+            `https://friends-public-service-prod06.ol.epicgames.com/friends/api/v1/${token.account_id}/friends/${f.accountId}`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${token.access_token}` } },
+          ),
+        ),
+      );
+      const removed = results.filter((r) => r.status === 'fulfilled').length;
+      res.json({ message: `✅ Removed **${removed}** of **${friends.length}** friends from **${token.displayName}**'s account.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[fortnite/clear-friends] error:', msg);
+      res.json({
+        message: isEpicAuthError(msg)
+          ? '❌ Your auth code is invalid or has expired. Please generate a new one.'
+          : `❌ Error: ${msg}`,
+      });
+    }
+  });
+
+  // POST /api/fortnite/launch?key=YOUR_API_KEY  — body { authCode }
+  app.post('/api/fortnite/launch', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const authCode = (req.body?.authCode || '').toString().trim();
+    if (!authCode) {
+      return res.json({ message: '❌ Invalid auth code. Please generate a new one and try again.' });
+    }
+    try {
+      const token = await getTokenFromAuthCode(authCode);
+      const exchangeRes = await fetch(
+        'https://account-public-service-prod.ol.epicgames.com/account/api/oauth/exchange',
+        { headers: { Authorization: `Bearer ${token.access_token}` } },
+      );
+      const exchange = (await exchangeRes.json()) as Record<string, unknown>;
+      if (!exchangeRes.ok) {
+        throw new Error(typeof exchange.errorMessage === 'string' ? exchange.errorMessage : 'Exchange failed');
+      }
+      res.json({
+        message: `✅ Launch code generated for **${token.displayName}**!\nClick to launch Fortnite: com.epicgames.launcher://apps/Fortnite?action=launch&silent=true&exchangeCode=${exchange.code}`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[fortnite/launch] error:', msg);
+      res.json({
+        message: isEpicAuthError(msg)
+          ? '❌ Your auth code is invalid or has expired. Please generate a new one.'
+          : `❌ Error: ${msg}`,
+      });
+    }
+  });
+
   // Submit IP to local resolver DB
   // BotGhost: GET /api/submit-ip/{gamertag}/{ip}?key=YOUR_API_KEY
   app.get('/api/submit-ip/:gamertag/:ip', async (req, res) => {
