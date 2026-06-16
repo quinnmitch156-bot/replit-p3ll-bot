@@ -7,6 +7,7 @@ import { startBot, dmOwner, dmOwnerPaymentClaim, dmOwnerGiftCard, findStoreProdu
 import { randomBytes } from "crypto";
 import { getEpicAccessToken } from "./services/epicAuth";
 import { lookupPsnProfile } from "./services/psn";
+import { getTokenFromAuthCode, getFortniteToken, isEpicAuthError } from "./services/fortniteAuthCode";
 import { generateXboxReceipt } from "./services/receiptGenerator";
 import { fetchGunsmith } from "./services/xbox";
 import { fetchOriginalPlatform } from "./services/epicAccount";
@@ -292,6 +293,120 @@ export async function registerRoutes(
     } catch (e) {
       console.error('[psn/lookup] error:', e);
       res.status(500).json({ found: false, error: 'Internal error during PSN lookup' });
+    }
+  });
+
+  // ─── Fortnite auth-code commands (BotGhost) ────────────────────────────────
+  // All POST. Body: { "authCode": "<Epic authorization code>" }. Protected by ?key=
+  // The user generates an auth code at:
+  //   https://www.epicgames.com/id/api/redirect?clientId=3446cd72694c4a4485d81b77adbb2141&responseType=code
+
+  // POST /api/fortnite/account-info?key=YOUR_API_KEY  — body { authCode }
+  app.post('/api/fortnite/account-info', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const authCode = (req.body?.authCode || '').toString().trim();
+    if (!authCode) {
+      return res.json({ message: '❌ Invalid auth code. Please generate a new one and try again.' });
+    }
+    try {
+      const token = await getTokenFromAuthCode(authCode);
+      const accountRes = await fetch(
+        `https://account-public-service-prod.ol.epicgames.com/account/api/public/account/${token.account_id}`,
+        { headers: { Authorization: `Bearer ${token.access_token}` } },
+      );
+      const a = (await accountRes.json()) as Record<string, unknown>;
+      res.json({
+        message: [
+          `✅ Account Info for **${a.displayName}**`,
+          `Account ID: ${a.id}`,
+          `Email: ${a.email}`,
+          `Name: ${a.name} ${a.lastName}`,
+          `Country: ${a.country}`,
+          `Language: ${a.preferredLanguage}`,
+          `2FA Enabled: ${a.tfaEnabled ? 'Yes' : 'No'}`,
+        ].join('\n'),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[fortnite/account-info] error:', msg);
+      res.json({
+        message: isEpicAuthError(msg)
+          ? '❌ Your auth code is invalid or has expired. Please generate a new one.'
+          : `❌ Error: ${msg}`,
+      });
+    }
+  });
+
+  // POST /api/fortnite/ban-date?key=YOUR_API_KEY  — body { authCode }
+  app.post('/api/fortnite/ban-date', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const authCode = (req.body?.authCode || '').toString().trim();
+    if (!authCode) {
+      return res.json({ message: '❌ Invalid auth code. Please generate a new one and try again.' });
+    }
+    try {
+      const token = await getFortniteToken(authCode);
+      const profileRes = await fetch(
+        `https://fortnite-public-service-prod11.ol.epicgames.com/fortnite/api/game/v2/profile/${token.account_id}/client/QueryProfile?profileId=common_core&rvn=-1`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
+      );
+      const profileData = (await profileRes.json()) as Record<string, unknown>;
+      const stats = ((profileData?.profileChanges as Array<Record<string, unknown>>)?.[0]?.profile as Record<string, unknown>)?.stats as Record<string, unknown> | undefined;
+      const attrs = stats?.attributes as Record<string, unknown> | undefined;
+      const banEndDate = attrs?.ban_end_date as string | undefined;
+      const banReason = attrs?.ban_reason as string | undefined;
+
+      if (banEndDate) {
+        res.json({
+          message: [
+            `🔨 **${token.displayName}** is banned!`,
+            `Ban Ends: ${new Date(banEndDate).toUTCString()}`,
+            banReason ? `Reason: ${banReason}` : '',
+          ].filter(Boolean).join('\n'),
+        });
+      } else {
+        res.json({ message: `✅ **${token.displayName}** is not currently banned.` });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[fortnite/ban-date] error:', msg);
+      res.json({
+        message: isEpicAuthError(msg)
+          ? '❌ Your auth code is invalid or has expired. Please generate a new one.'
+          : `❌ Error: ${msg}`,
+      });
+    }
+  });
+
+  // POST /api/fortnite/support-us?key=YOUR_API_KEY  — body { authCode }
+  app.post('/api/fortnite/support-us', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const authCode = (req.body?.authCode || '').toString().trim();
+    if (!authCode) {
+      return res.json({ message: '❌ Invalid auth code. Please generate a new one and try again.' });
+    }
+    const creatorCode = process.env.CREATOR_CODE ?? 'xstarsx';
+    try {
+      const token = await getFortniteToken(authCode);
+      const sacRes = await fetch(
+        `https://fortnite-public-service-prod11.ol.epicgames.com/fortnite/api/game/v2/profile/${token.account_id}/client/SetAffiliateName?profileId=common_core&rvn=-1`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliateName: creatorCode }) },
+      );
+      const sacData = (await sacRes.json()) as Record<string, unknown>;
+      if (!sacRes.ok) {
+        const epicError = typeof sacData.errorMessage === 'string' ? sacData.errorMessage : 'Epic Games rejected the request';
+        console.warn('[fortnite/support-us] epic error:', epicError);
+        return res.json({ message: `❌ Failed to apply creator code: ${epicError}` });
+      }
+      res.json({ message: `✅ **${token.displayName}** is now supporting creator code **${creatorCode}**! Thank you!` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[fortnite/support-us] error:', msg);
+      res.json({
+        message: isEpicAuthError(msg)
+          ? '❌ Your auth code is invalid or has expired. Please generate a new one.'
+          : `❌ Error: ${msg}`,
+      });
     }
   });
 
