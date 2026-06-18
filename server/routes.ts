@@ -9,7 +9,7 @@ import { getEpicAccessToken } from "./services/epicAuth";
 import { lookupPsnProfile } from "./services/psn";
 import { getTokenFromAuthCode, getFortniteToken, isEpicAuthError } from "./services/fortniteAuthCode";
 import { generateXboxReceipt } from "./services/receiptGenerator";
-import { fetchGunsmith } from "./services/xbox";
+import { fetchGunsmith, fetchGameClips } from "./services/xbox";
 import { fetchOriginalPlatform } from "./services/epicAccount";
 import fs from "fs";
 import path from "path";
@@ -686,6 +686,40 @@ export async function registerRoutes(
     if (r.error) return res.type('text/plain').send(r.error);
     if (!r.unlockedAt) return res.type('text/plain').send('🔒 Gunsmith not unlocked on this account.');
     res.type('text/plain').send(r.unlockedAt);
+  });
+
+  // Xbox Game Clips — an account's published Game DVR clips (via xbl.io)
+  // BotGhost: GET /api/xbox/clips?gamertag={option_gamertag}&key=YOUR_API_KEY
+  // Returns plain text suitable for an embed/message. Only returns clips the user
+  // published that are still public; Xbox deletes clips older than ~90 days, so old
+  // (2017/2018) clips are typically gone from Microsoft's side.
+  app.get('/api/xbox/clips', async (req, res) => {
+    if (!checkKey(req, res)) return;
+    const gamertag = ((req.query.gamertag as string) || '').trim();
+    if (!gamertag) return res.type('text/plain').send('❌ Missing `gamertag` query param.');
+    const r = await fetchGameClips(gamertag);
+    if (r.error) return res.type('text/plain').send(r.error);
+    if (r.clips.length === 0) {
+      return res.type('text/plain').send(
+        `📭 No published Game DVR clips found for ${r.gamertag}.\n` +
+        `Xbox deletes clips older than ~90 days unless saved, so old clips (e.g. 2017/2018) are typically gone. Only clips the user published and that are still public can be shown.`
+      );
+    }
+    const limit = Math.min(Math.max(parseInt((req.query.limit as string) || '5', 10) || 5, 1), 10);
+    const top = r.clips
+      .slice()
+      .sort((a, b) => new Date(b.datePublished || b.dateRecorded || 0).getTime() - new Date(a.datePublished || a.dateRecorded || 0).getTime())
+      .slice(0, limit);
+    const lines = top.map((c) => {
+      const when = c.datePublished || c.dateRecorded;
+      const dateStr = when ? formatAchievementDate(new Date(when)) : 'Unknown date';
+      const dur = c.durationInSeconds ? `${c.durationInSeconds}s` : '—';
+      const link = c.videoUri || '(no link available)';
+      return `🎬 **${c.titleName}** • ${dateStr} • ${dur} • 👁 ${c.views}\n${link}`;
+    });
+    res.type('text/plain').send(
+      `🟢 **Gamertag:** ${r.gamertag}\n**Clips found:** ${r.clips.length}${r.clips.length > top.length ? ` (showing latest ${top.length})` : ''}\n\n` + lines.join('\n\n')
+    );
   });
 
   // Original Name Check — what platform an Epic account was ORIGINALLY made on
