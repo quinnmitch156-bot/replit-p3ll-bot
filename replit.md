@@ -6,6 +6,7 @@ A Discord bot for Epic Games / Xbox / PSN account OSINT, Fortnite stats, receipt
 
 ### Xbox
 - `/check_xbox [gamertag]` — Full Xbox profile + linked platforms (Epic/PSN/Nintendo/Steam) + xbl.io lookup count
+- `/xbox_clips [gamertag]` — Account's published Game DVR clips (latest 10, with watch links) via xbl.io. Only returns clips the user published that are still public; Xbox deletes clips older than ~90 days, so old (2017/2018) clips are typically gone
 - `/xbox_ip [gamertag]` — Resolve Xbox gamertag to IP via multi-resolver network
 - `/xbox_friends [gamertag]` — Xbox friends list sorted by online status
 - `/xbox_aov [gamertag] [ip]` — Generate Xbox AOV script

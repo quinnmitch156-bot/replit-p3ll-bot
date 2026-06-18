@@ -1,1 +1,2 @@
 - [PSN api gotchas](psn-api.md) — psn-api privacy model: trophies/presence/friends need friendship or "Anyone" privacy; auth flow, testing tips.
+- [Xbox Game DVR clips](xbox-gameclips.md) — xbl.io `dvr/gameclips/{xuid}` works for current public clips; old clips gone (~90-day purge); dead endpoints listed.

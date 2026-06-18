@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ActivityType, MessageFlags, AttachmentBuilder } from 'discord.js';
 import { storage } from './storage';
 import { fortniteService } from './services/fortnite';
-import { xboxService, fetchGunsmith } from './services/xbox';
+import { xboxService, fetchGunsmith, fetchGameClips } from './services/xbox';
 import { fetchOriginalPlatform } from './services/epicAccount';
 import { getEpicAccessToken, createDeviceAuth, getConfiguredBurners, getBurnerToken } from './services/epicAuth';
 import { lookupPsnProfile } from './services/psn';
@@ -257,6 +257,10 @@ const commands = [
     .setName('check_xbox')
     .setDescription('Provides detailed Xbox profile info, linked platforms & lookup count via xbl.io')
     .addStringOption(option => option.setName('xbox_name').setDescription('The Xbox Gamertag').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('xbox_clips')
+    .setDescription('Get an Xbox account\'s published Game DVR clips via xbl.io')
+    .addStringOption(option => option.setName('gamertag').setDescription('The Xbox Gamertag').setRequired(true)),
   new SlashCommandBuilder()
     .setName('epic_lookup')
     .setDescription('Look up an Epic Games account by username')
@@ -1942,6 +1946,50 @@ Thank you for your help, I hope I will hear from you soon.`;
             .setTimestamp();
           if (avatarUrl) achEmbed.setThumbnail(avatarUrl);
           await interaction.editReply({ embeds: [achEmbed] });
+          break;
+        }
+
+        case 'xbox_clips': {
+          await interaction.deferReply();
+          const clipsGt = interaction.options.getString('gamertag', true).trim();
+          const result = await fetchGameClips(clipsGt);
+          if (result.error) {
+            await interaction.editReply({ content: result.error });
+            break;
+          }
+          if (result.clips.length === 0) {
+            await interaction.editReply({
+              content: `📭 No published Game DVR clips found for **${result.gamertag}**.\n\nThis usually means the account has no currently-public clips. Xbox deletes clips older than ~90 days unless saved, so old clips (e.g. 2017/2018) are typically gone from Microsoft's side. Only clips the user published and that are still public can be shown.`
+            });
+            break;
+          }
+          const topClips = result.clips
+            .slice()
+            .sort((a, b) => new Date(b.datePublished || b.dateRecorded || 0).getTime() - new Date(a.datePublished || a.dateRecorded || 0).getTime())
+            .slice(0, 10);
+          const clipsEmbed = new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle(`${result.gamertag} — Xbox Game Clips`)
+            .setDescription(`Found **${result.clips.length}** published clip${result.clips.length === 1 ? '' : 's'}${result.clips.length > topClips.length ? ` (showing latest ${topClips.length})` : ''}.`)
+            .setFooter({ text: 'Made By Honor Guard • discord.gg/honorguard' })
+            .setTimestamp();
+          const firstThumb = topClips.find(c => c.thumbnailUri)?.thumbnailUri;
+          if (firstThumb) clipsEmbed.setThumbnail(firstThumb);
+          for (const c of topClips) {
+            const when = c.datePublished || c.dateRecorded;
+            const dateStr = when ? formatAchievementDate(new Date(when)) : 'Unknown date';
+            const dur = c.durationInSeconds ? `${c.durationInSeconds}s` : '—';
+            const link = c.videoUri ? `[▶ Watch clip](${c.videoUri})` : '(no link available)';
+            const rawName = `${c.titleName} • ${dateStr}`;
+            const name = rawName.length > 256 ? rawName.slice(0, 253) + '…' : rawName;
+            const value = `${link} • ${dur} • 👁 ${c.views} views`;
+            clipsEmbed.addFields({
+              name,
+              value: value.length > 1024 ? value.slice(0, 1021) + '…' : value,
+              inline: false,
+            });
+          }
+          await interaction.editReply({ embeds: [clipsEmbed] });
           break;
         }
 

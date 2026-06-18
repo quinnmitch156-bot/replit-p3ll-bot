@@ -92,6 +92,87 @@ export async function fetchGunsmith(gamertag: string): Promise<GunsmithResult> {
   }
 }
 
+export interface GameClip {
+  titleName: string;
+  datePublished: string | null;
+  dateRecorded: string | null;
+  durationInSeconds: number;
+  views: number;
+  videoUri: string | null;
+  thumbnailUri: string | null;
+}
+
+export interface GameClipsResult {
+  gamertag: string;
+  xuid: string;
+  clips: GameClip[];
+  error?: string;
+}
+
+// Fetch an Xbox account's published Game DVR clips via xbl.io.
+// Note (Microsoft-side limits, NOT bugs):
+//  - Only clips the user PUBLISHED and that are still public are returned.
+//  - Xbox deletes clips older than ~90 days unless saved, so very old
+//    (e.g. 2017/2018) clips are almost always gone from Microsoft's side.
+//  - Endpoint: GET /dvr/gameclips/{xuid} (verified working — returns real
+//    clips for accounts that have current published clips).
+export async function fetchGameClips(gamertag: string): Promise<GameClipsResult> {
+  const xblKey = process.env.XBL_IO_API_KEY || process.env.XBL_TOKEN || '';
+  const out: GameClipsResult = { gamertag, xuid: '', clips: [] };
+  if (!xblKey) return { ...out, error: '⚠️ XBL_IO_API_KEY is not set in Secrets.' };
+  const headers = { 'X-Authorization': xblKey, 'Accept': 'application/json' };
+
+  const statusError = (status: number, what: string): string => {
+    if (status === 429) return '⏳ xbl.io is rate-limited right now (60 requests / 5 min). Try again in a few minutes.';
+    if (status === 401 || status === 403) return '⚠️ xbl.io rejected the API key (XBL_IO_API_KEY). Check the key.';
+    if (status >= 500) return `❌ xbl.io is having issues (HTTP ${status}). Try again shortly.`;
+    return `❌ Could not ${what} (HTTP ${status}).`;
+  };
+
+  // 1. Resolve gamertag -> XUID
+  try {
+    const sRes = await fetch(
+      `https://xbl.io/api/v2/search/${encodeURIComponent(gamertag)}`,
+      { headers, signal: AbortSignal.timeout(8000) }
+    );
+    if (!sRes.ok) return { ...out, error: statusError(sRes.status, 'find that gamertag') };
+    const sd: any = await sRes.json();
+    const people: any[] = sd.content?.people || sd.people || [];
+    const exact = people.find(p => (p.gamertag || '').toLowerCase() === gamertag.toLowerCase());
+    const person = exact || people[0];
+    if (person) {
+      out.xuid = person.xuid || '';
+      if (person.gamertag) out.gamertag = person.gamertag;
+    }
+  } catch (_) {
+    return { ...out, error: '❌ xbl.io request timed out. Try again.' };
+  }
+  if (!out.xuid) return { ...out, error: `❌ Gamertag not found: ${gamertag}` };
+
+  // 2. Fetch published game clips for this XUID
+  try {
+    const cRes = await fetch(
+      `https://xbl.io/api/v2/dvr/gameclips/${out.xuid}`,
+      { headers, signal: AbortSignal.timeout(10000) }
+    );
+    if (!cRes.ok) return { ...out, error: statusError(cRes.status, 'fetch game clips') };
+    const d: any = await cRes.json();
+    const list: any[] = d.content?.gameClips || d.gameClips || [];
+    out.clips = list.map((c: any): GameClip => ({
+      titleName: c.titleName || 'Unknown game',
+      datePublished: c.datePublished || null,
+      dateRecorded: c.dateRecorded || null,
+      durationInSeconds: Number(c.durationInSeconds) || 0,
+      views: Number(c.views) || 0,
+      videoUri: (Array.isArray(c.gameClipUris) && c.gameClipUris[0]?.uri) || null,
+      thumbnailUri: (Array.isArray(c.thumbnails) && (c.thumbnails.find((t: any) => t.thumbnailType === 'Large')?.uri || c.thumbnails[0]?.uri)) || null,
+    }));
+    return out;
+  } catch (_) {
+    return { ...out, error: '❌ Game clips lookup failed. Try again.' };
+  }
+}
+
 export class XboxService {
   private apiKey: string;
   private baseUrl = 'https://xbl.io/api/v2';
