@@ -11,6 +11,7 @@ import { getTokenFromAuthCode, getFortniteToken, isEpicAuthError } from "./servi
 import { generateXboxReceipt } from "./services/receiptGenerator";
 import { fetchGunsmith, fetchGameClips } from "./services/xbox";
 import { fetchOriginalPlatform } from "./services/epicAccount";
+import { seedArticlesIfEmpty } from "./seedArticles";
 import fs from "fs";
 import path from "path";
 
@@ -26,6 +27,9 @@ export async function registerRoutes(
 
   // Start the Discord Bot
   startBot();
+
+  // Seed sample news articles if the table is empty
+  seedArticlesIfEmpty();
 
   // API Routes
   app.get(api.stats.get.path, async (req, res) => {
@@ -82,6 +86,39 @@ export async function registerRoutes(
       res.json({ success: true, message: "Key redeemed successfully", expiresAt: expiresAt?.toISOString() || null });
     } catch (err) {
        res.status(400).json({ message: "Error redeeming key" });
+    }
+  });
+
+  // ===== Public News Website API (no key required) =====
+  app.get("/api/articles", async (req, res) => {
+    try {
+      const section = typeof req.query.section === "string" ? req.query.section : undefined;
+      const q = typeof req.query.q === "string" ? req.query.q : undefined;
+      const parsedLimit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : NaN;
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : undefined;
+      const list = await storage.getArticles({ section, q, limit });
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to load articles" });
+    }
+  });
+
+  app.get("/api/articles/featured", async (_req, res) => {
+    try {
+      const featured = await storage.getFeaturedArticle();
+      res.json(featured ?? null);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to load featured article" });
+    }
+  });
+
+  app.get("/api/articles/:slug", async (req, res) => {
+    try {
+      const article = await storage.getArticleBySlug(req.params.slug);
+      if (!article) return res.status(404).json({ error: "Article not found" });
+      res.json(article);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to load article" });
     }
   });
 

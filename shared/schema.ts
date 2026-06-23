@@ -56,6 +56,23 @@ export const logs = pgTable("logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const articles = pgTable("articles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").unique().notNull(),
+  section: text("section").notNull(), // gaming-news | esports | technology | community-updates
+  excerpt: text("excerpt").notNull(),
+  content: text("content").notNull(),
+  author: text("author").notNull().default("Staff Writer"),
+  imageUrl: text("image_url").notNull(),
+  featured: boolean("featured").default(false),
+  publishedAt: timestamp("published_at").defaultNow(),
+});
+
+export const insertArticleSchema = createInsertSchema(articles).omit({ id: true, publishedAt: true });
+export type Article = typeof articles.$inferSelect;
+export type InsertArticle = z.infer<typeof insertArticleSchema>;
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertKeySchema = createInsertSchema(keys).omit({ id: true, createdAt: true, redeemedBy: true });
 export const insertLogSchema = createInsertSchema(logs).omit({ id: true, createdAt: true });

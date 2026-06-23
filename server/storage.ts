@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { users, keys, logs, genCodes, resolverDb, type User, type InsertUser, type Key, type InsertKey, type Log, type InsertLog, type GenCode, type ResolverEntry } from "@shared/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { users, keys, logs, genCodes, resolverDb, articles, type User, type InsertUser, type Key, type InsertKey, type Log, type InsertLog, type GenCode, type ResolverEntry, type Article, type InsertArticle } from "@shared/schema";
+import { eq, and, or, sql, desc, ilike } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -29,6 +29,12 @@ export interface IStorage {
   
   // Stats
   getStats(): Promise<{ totalUsers: number; activeSubs: number; totalLookups: number }>;
+
+  // Article operations
+  getArticles(opts?: { section?: string; q?: string; limit?: number }): Promise<Article[]>;
+  getArticleBySlug(slug: string): Promise<Article | undefined>;
+  getFeaturedArticle(): Promise<Article | undefined>;
+  createArticle(article: InsertArticle): Promise<Article>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -120,6 +126,35 @@ export class DatabaseStorage implements IStorage {
   async createLog(log: InsertLog): Promise<Log> {
     const [newLog] = await db.insert(logs).values(log).returning();
     return newLog;
+  }
+
+  async getArticles(opts: { section?: string; q?: string; limit?: number } = {}): Promise<Article[]> {
+    const conditions = [];
+    if (opts.section) conditions.push(eq(articles.section, opts.section));
+    if (opts.q) {
+      const term = `%${opts.q}%`;
+      conditions.push(or(ilike(articles.title, term), ilike(articles.excerpt, term), ilike(articles.content, term)));
+    }
+    let query = db.select().from(articles).$dynamic();
+    if (conditions.length) query = query.where(and(...conditions));
+    query = query.orderBy(desc(articles.publishedAt));
+    if (opts.limit) query = query.limit(opts.limit);
+    return query;
+  }
+
+  async getArticleBySlug(slug: string): Promise<Article | undefined> {
+    const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
+    return article;
+  }
+
+  async getFeaturedArticle(): Promise<Article | undefined> {
+    const [article] = await db.select().from(articles).where(eq(articles.featured, true)).orderBy(desc(articles.publishedAt)).limit(1);
+    return article;
+  }
+
+  async createArticle(article: InsertArticle): Promise<Article> {
+    const [created] = await db.insert(articles).values(article).returning();
+    return created;
   }
 
   async getStats(): Promise<{ totalUsers: number; activeSubs: number; totalLookups: number }> {

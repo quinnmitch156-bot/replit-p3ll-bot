@@ -66,6 +66,14 @@ Epic Bearer tokens expire every 8 hours. To make Epic APIs work permanently:
 3. Copy the 3 values it gives you into secrets: `EPIC_ACCOUNT_ID`, `EPIC_DEVICE_ID`, `EPIC_DEVICE_SECRET`
 4. The bot will auto-refresh its token forever — no manual updates needed
 
+## Vanguard News Website (frontend)
+The web frontend is a standalone professional gaming news site ("Vanguard") with 4 sections: Gaming News, Esports, Technology, Community Updates. It is separate from the Discord bot (which runs in the background).
+- **Pages** (`client/src/pages/`): `Home` (featured hero + latest + per-section rows), `Section` (`/section/:slug`), `Article` (`/article/:slug`), `SearchResults` (`/search?q=`)
+- **Components** (`client/src/components/`): `Navbar` (nav + search), `Footer`, `ArticleCard`, `Layout`
+- **Sections config**: `client/src/lib/sections.ts` (slugs: `gaming-news`, `esports`, `technology`, `community-updates`)
+- **Public API** (no key required, in `server/routes.ts`): `GET /api/articles?section=&q=&limit=`, `GET /api/articles/featured`, `GET /api/articles/:slug`
+- **Data**: `articles` table in `shared/schema.ts`; CRUD in `server/storage.ts`; sample content seeded on startup via `server/seedArticles.ts` (seeds only when table is empty)
+
 ## Architecture
 - **Backend**: Express + Drizzle ORM (`server/`)
 - **Frontend**: React + Vite (`client/`)
