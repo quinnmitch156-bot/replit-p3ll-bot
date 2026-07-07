@@ -1,0 +1,44 @@
+databases:
+  - name: galaxy-bot-db
+    plan: free
+    databaseName: galaxybot
+    user: galaxybot
+
+services:
+  - type: web
+    name: galaxy-bot
+    plan: free
+    runtime: node
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: galaxy-bot-db
+          property: connectionString
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: EPIC_AUTH
+        sync: false
+      - key: EPIC_ACCOUNT_ID
+        sync: false
+      - key: EPIC_DEVICE_ID
+        sync: false
+      - key: EPIC_DEVICE_SECRET
+        sync: false
+      - key: NPSSO
+        sync: false
+      - key: XBL_IO_API_KEY
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: BOT_ACCESS_ROLE_ID
+        sync: false
+      - key: FORTNITE_API_KEY
+        sync: false
+      - key: PROD_FORTNITE_API_KEY
+        sync: false
