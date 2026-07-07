@@ -10,9 +10,14 @@ WORKDIR /app
 COPY .npmrc ./
 COPY package*.json ./
 
-RUN npm config delete proxy || true \
-    && npm config delete https-proxy || true \
-    && npm ci
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
+ENV http_proxy=""
+ENV https_proxy=""
+ENV npm_config_proxy=""
+ENV npm_config_https_proxy=""
+
+RUN npm ci
 
 COPY . .
 RUN npm run build
