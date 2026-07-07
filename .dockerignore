@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+*.md
+.local
+attached_assets
+public/receipts
+.agents
