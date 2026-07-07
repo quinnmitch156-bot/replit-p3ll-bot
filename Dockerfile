@@ -10,14 +10,9 @@ WORKDIR /app
 COPY .npmrc ./
 COPY package*.json ./
 
-ENV HTTP_PROXY=""
-ENV HTTPS_PROXY=""
-ENV http_proxy=""
-ENV https_proxy=""
-ENV npm_config_proxy=""
-ENV npm_config_https_proxy=""
-
-RUN npm ci
+RUN sed -i 's|http://package-firewall.replit.local/npm/|https://registry.npmjs.org/|g' package-lock.json \
+    && npm config set registry https://registry.npmjs.org \
+    && npm ci
 
 COPY . .
 RUN npm run build

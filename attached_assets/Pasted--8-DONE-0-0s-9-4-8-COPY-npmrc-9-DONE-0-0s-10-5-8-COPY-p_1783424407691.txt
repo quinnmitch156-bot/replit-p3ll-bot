@@ -1,0 +1,45 @@
+#8 DONE 0.0s
+#9 [4/8] COPY .npmrc ./
+#9 DONE 0.0s
+#10 [5/8] COPY package*.json ./
+#10 DONE 0.0s
+#11 [6/8] RUN npm ci
+#11 72.24 npm error code ENOTFOUND
+#11 72.24 npm error syscall getaddrinfo
+#11 72.24 npm error errno ENOTFOUND
+#11 72.24 npm error network request to http://package-firewall.replit.local/npm/whatwg-url/-/whatwg-url-5.0.0.tgz failed, reason: getaddrinfo ENOTFOUND package-firewall.replit.local
+#11 72.24 npm error network This is a problem related to network connectivity.
+#11 72.24 npm error network In most cases you are behind a proxy or have bad network settings.
+#11 72.24 npm error network
+#11 72.24 npm error network If you are behind a proxy, please make sure that the
+#11 72.24 npm error network 'proxy' config is set properly.  See: 'npm help config'
+#11 72.24 npm notice
+#11 72.24 npm notice New major version of npm available! 10.8.2 -> 11.18.0
+#11 72.24 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.18.0
+#11 72.24 npm notice To update run: npm install -g npm@11.18.0
+#11 72.24 npm notice
+#11 72.24 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-07-07T11_37_31_194Z-debug-0.log
+#11 ERROR: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+------
+ > [6/8] RUN npm ci:
+72.24 npm error network In most cases you are behind a proxy or have bad network settings.
+72.24 npm error network
+72.24 npm error network If you are behind a proxy, please make sure that the
+72.24 npm error network 'proxy' config is set properly.  See: 'npm help config'
+72.24 npm notice
+72.24 npm notice New major version of npm available! 10.8.2 -> 11.18.0
+72.24 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.18.0
+72.24 npm notice To update run: npm install -g npm@11.18.0
+72.24 npm notice
+72.24 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-07-07T11_37_31_194Z-debug-0.log
+------
+Dockerfile:20
+--------------------
+  18 |     ENV npm_config_https_proxy=""
+  19 |     
+  20 | >>> RUN npm ci
+  21 |     
+  22 |     COPY . .
+--------------------
+error: failed to solve: process "/bin/sh -c npm ci" did not complete successfully: exit code: 1
+error: exit status 1
