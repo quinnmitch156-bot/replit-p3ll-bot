@@ -122,17 +122,8 @@ export async function registerRoutes(
     }
   });
 
-  // Helper: check API key
+  // Helper: check API key (auth disabled — open access)
   function checkKey(req: any, res: any): boolean {
-    const apiKey = process.env.TOKEN_API_KEY;
-    if (!apiKey) {
-      res.status(503).json({ error: 'API key not configured on server' });
-      return false;
-    }
-    if (req.headers['x-api-key'] !== apiKey && req.query.key !== apiKey) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return false;
-    }
     return true;
   }
 
